@@ -1,4 +1,4 @@
-# alsa-lib
+# alsa-lib2
 ## Advanced Linux Sound Architecture (ALSA) project
 
 The alsa-lib is a library to interface with ALSA in the Linux kernel and
