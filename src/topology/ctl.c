@@ -427,6 +427,50 @@ int tplg_save_tlv(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return err;
 }
 
+static int parse_enum_text_refs(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
+				snd_config_t *cfg,
+				struct tplg_elem *elem)
+{
+	struct snd_soc_tplg_enum_control *ec = elem->enum_ctrl;
+	snd_config_type_t  type;
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	const char *id;
+
+	if (snd_config_get_id(cfg, &id) < 0)
+		return -EINVAL;
+	type = snd_config_get_type(cfg);
+
+	if (type != SND_CONFIG_TYPE_COMPOUND) {
+		SNDERR("error: compound type expected for %s", id);
+		return -EINVAL;
+	}
+
+	/* refer to a list of enum texts */
+	snd_config_for_each(i, next, cfg) {
+		const char *val;
+		int err;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_string(n, &val) < 0)
+			continue;
+
+		if (ec->items >= SND_SOC_TPLG_NUM_TEXTS) {
+			SNDERR("error: exceed max hw configs for link %s", id);
+			return -EINVAL;
+		}
+
+		ec->items++;
+		err = tplg_ref_add(elem, SND_TPLG_TYPE_TEXT, val);
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t%s: %s\n", id, val);
+	}
+
+	return 0;
+}
+
 /* Parse Control Bytes */
 int tplg_parse_control_bytes(snd_tplg_t *tplg,
 			     snd_config_t *cfg,
@@ -605,7 +649,7 @@ int tplg_parse_control_enum(snd_tplg_t *tplg, snd_config_t *cfg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
+	const char *id;
 	int err, j;
 	bool access_set = false;
 
@@ -639,11 +683,9 @@ int tplg_parse_control_enum(snd_tplg_t *tplg, snd_config_t *cfg,
 			continue;
 
 		if (strcmp(id, "texts") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			tplg_ref_add(elem, SND_TPLG_TYPE_TEXT, val);
-			tplg_dbg("\t%s: %s", id, val);
+			err = parse_enum_text_refs(tplg, n, elem);
+			if (err < 0)
+				return err;
 			continue;
 		}
 
