@@ -138,6 +138,8 @@ struct tplg_tuple {
 struct tplg_tuple_set {
 	unsigned int  type; /* uuid, bool, byte, short, word, string*/
 	unsigned int  num_tuples;
+	char token_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	struct list_head list; /* item in tuple_set_list */
 	struct tplg_tuple tuple[0];
 };
 
@@ -288,7 +290,6 @@ int tplg_parse_dai(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_cc(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
-
 unsigned int tplg_get_tuple_size(int type);
 void tplg_free_tuples(void *obj);
 
