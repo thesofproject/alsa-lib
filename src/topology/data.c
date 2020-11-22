@@ -18,6 +18,7 @@
 */
 
 #include "list.h"
+#include "local.h"
 #include "tplg_local.h"
 #include <ctype.h>
 
@@ -340,7 +341,7 @@ end:
 }
 
 /* get uuid from a string made by 16 characters separated by commas */
-static int get_uuid(const char *str, unsigned char *uuid_le)
+int get_uuid(const char *str, unsigned char *uuid_le)
 {
 	unsigned long int  val;
 	char *tmp, *s = NULL;
@@ -465,8 +466,7 @@ static int copy_data_hex(char *data, int off, const char *str, int width)
 	return 0;
 }
 
-static int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem,
-	int width)
+int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem, int width)
 {
 	struct snd_soc_tplg_private *priv;
 	const char *value = NULL;
@@ -516,8 +516,7 @@ static int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem,
 }
 
 /* get the token integer value from its id */
-static int get_token_value(const char *token_id,
-			   struct tplg_vendor_tokens *tokens)
+int get_token_value(const char *token_id, struct tplg_vendor_tokens *tokens)
 {
 	unsigned int i;
 
@@ -588,88 +587,98 @@ unsigned int tplg_get_tuple_size(int type)
 	}
 }
 
+int scan_tuple_set(struct tplg_elem *elem, struct tplg_tuple_set *tuple_set,
+		   struct tplg_vendor_tokens *tokens, int size)
+{
+	struct snd_soc_tplg_private *priv = elem->data, *priv2;
+	struct snd_soc_tplg_vendor_string_elem *string;
+	struct snd_soc_tplg_vendor_value_elem *value;
+	struct snd_soc_tplg_vendor_uuid_elem *uuid;
+	struct snd_soc_tplg_vendor_array *array;
+	struct tplg_tuple *tuple;
+	int set_size, off;
+	unsigned int j;
+	int token_val;
+
+
+	set_size = sizeof(*array) + tplg_get_tuple_size(tuple_set->type) * tuple_set->num_tuples;
+	size += set_size;
+	if (size > TPLG_MAX_PRIV_SIZE) {
+		SNDERR("data too big %d", size);
+		return -EINVAL;
+	}
+
+	if (priv != NULL) {
+		priv2 = realloc(priv, sizeof(*priv) + size);
+		if (priv2 == NULL) {
+			free(priv);
+			priv = NULL;
+		} else {
+			priv = priv2;
+		}
+	} else {
+		priv = calloc(1, sizeof(*priv) + size);
+	}
+	if (!priv)
+		return -ENOMEM;
+
+	off = priv->size;
+	priv->size = size; /* update private data size */
+	elem->data = priv;
+
+	array = (struct snd_soc_tplg_vendor_array *)(priv->data + off);
+	memset(array, 0, set_size);
+	array->size = set_size;
+	array->type = tuple_set->type;
+	array->num_elems = tuple_set->num_tuples;
+
+	/* fill the private data buffer */
+	for (j = 0; j < tuple_set->num_tuples; j++) {
+		tuple = &tuple_set->tuple[j];
+		token_val = get_token_value(tuple->token, tokens);
+		if (token_val  < 0)
+			return -EINVAL;
+
+		switch (tuple_set->type) {
+		case SND_SOC_TPLG_TUPLE_TYPE_UUID:
+			uuid = &array->uuid[j];
+			uuid->token = token_val;
+			memcpy(uuid->uuid, tuple->uuid, 16);
+			break;
+
+		case SND_SOC_TPLG_TUPLE_TYPE_STRING:
+			string = &array->string[j];
+			string->token = token_val;
+			snd_strlcpy(string->string, tuple->string, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+			break;
+
+		default:
+			value = &array->value[j];
+			value->token = token_val;
+			value->value = tuple->value;
+			break;
+		}
+	}
+
+	return 0;
+}
+
 /* Add a tuples object to the private buffer of its parent data element */
 static int copy_tuples(struct tplg_elem *elem,
 		       struct tplg_vendor_tuples *tuples,
 		       struct tplg_vendor_tokens *tokens)
 {
-	struct snd_soc_tplg_private *priv = elem->data, *priv2;
-	struct tplg_tuple_set *tuple_set;
-	struct tplg_tuple *tuple;
-	struct snd_soc_tplg_vendor_array *array;
-	struct snd_soc_tplg_vendor_uuid_elem *uuid;
-	struct snd_soc_tplg_vendor_string_elem *string;
-	struct snd_soc_tplg_vendor_value_elem *value;
-	int set_size, size, off;
-	unsigned int i, j;
-	int token_val;
-
-	size = priv ? priv->size : 0; /* original private data size */
+	struct snd_soc_tplg_private *priv = elem->data;
+	unsigned int i;
+	int size, ret;
 
 	/* scan each tuples set (one set per type) */
 	for (i = 0; i < tuples->num_sets ; i++) {
-		tuple_set = tuples->set[i];
-		set_size = sizeof(struct snd_soc_tplg_vendor_array)
-			+ tplg_get_tuple_size(tuple_set->type)
-			* tuple_set->num_tuples;
-		size += set_size;
-		if (size > TPLG_MAX_PRIV_SIZE) {
-			SNDERR("data too big %d", size);
-			return -EINVAL;
-		}
-
-		if (priv != NULL) {
-			priv2 = realloc(priv, sizeof(*priv) + size);
-			if (priv2 == NULL) {
-				free(priv);
-				priv = NULL;
-			} else {
-				priv = priv2;
-			}
-		} else {
-			priv = calloc(1, sizeof(*priv) + size);
-		}
-		if (!priv)
-			return -ENOMEM;
-
-		off = priv->size;
-		priv->size = size; /* update private data size */
-		elem->data = priv;
-
-		array = (struct snd_soc_tplg_vendor_array *)(priv->data + off);
-		memset(array, 0, set_size);
-		array->size = set_size;
-		array->type = tuple_set->type;
-		array->num_elems = tuple_set->num_tuples;
-
-		/* fill the private data buffer */
-		for (j = 0; j < tuple_set->num_tuples; j++) {
-			tuple = &tuple_set->tuple[j];
-			token_val = get_token_value(tuple->token, tokens);
-			if (token_val  < 0)
-				return -EINVAL;
-
-			switch (tuple_set->type) {
-			case SND_SOC_TPLG_TUPLE_TYPE_UUID:
-				uuid = &array->uuid[j];
-				uuid->token = token_val;
-				memcpy(uuid->uuid, tuple->uuid, 16);
-				break;
-
-			case SND_SOC_TPLG_TUPLE_TYPE_STRING:
-				string = &array->string[j];
-				string->token = token_val;
-				snd_strlcpy(string->string, tuple->string,
-					SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
-				break;
-
-			default:
-				value = &array->value[j];
-				value->token = token_val;
-				value->value = tuple->value;
-				break;
-			}
-		}
+		size = priv ? priv->size : 0; /* original private data size */
+		ret = scan_tuple_set(elem, tuples->set[i], tokens, size);
+		if (ret < 0)
+			return ret;
+		priv = elem->data;
 	}
 
 	return 0;
@@ -756,7 +765,7 @@ static struct tuple_type tuple_types[] = {
 	},
 };
 
-static int get_tuple_type(const char *name)
+int get_tuple_type(const char *name)
 {
 	struct tuple_type *t;
 	unsigned int i;

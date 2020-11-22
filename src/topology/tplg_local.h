@@ -473,3 +473,10 @@ int tplg_parse_control_bytes_param(snd_tplg_t *tplg, snd_config_t *n,
 				    struct tplg_elem *elem);
 int parse_access_values(snd_config_t *cfg, struct snd_soc_tplg_ctl_hdr *hdr);
 int tplg_parse_tlv_dbscale_param(snd_config_t *n, struct snd_soc_tplg_tlv_dbscale *scale);
+int scan_tuple_set(struct tplg_elem *elem, struct tplg_tuple_set *tuple_set,
+		   struct tplg_vendor_tokens *tokens, int size);
+int get_uuid(const char *str, unsigned char *uuid_le);
+int get_tuple_type(const char *name);
+int get_token_value(const char *token_id, struct tplg_vendor_tokens *tokens);
+struct tplg_elem *tplg_elem_new_route(snd_tplg_t *tplg, int index);
+int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem, int width);
