@@ -1758,8 +1758,8 @@ int tplg_save_hw_config(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return err;
 }
 
-/* copy stream object */
-static void tplg_add_stream_object(struct snd_soc_tplg_stream *strm,
+/* copy stream config */
+static void tplg_add_stream_config(struct snd_soc_tplg_stream *strm,
 				   struct snd_tplg_stream_template *strm_tpl)
 {
 	snd_strlcpy(strm->name, strm_tpl->name,
@@ -1803,7 +1803,7 @@ static int tplg_add_stream_caps(snd_tplg_t *tplg,
 }
 
 /* Add a PCM element (FE DAI & DAI link) from C API */
-int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_pcm_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_pcm_template *pcm_tpl = t->pcm;
 	struct snd_soc_tplg_private *priv;
@@ -1849,7 +1849,7 @@ int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 
 	pcm->num_streams = pcm_tpl->num_streams;
 	for (i = 0; i < pcm_tpl->num_streams; i++)
-		tplg_add_stream_object(&pcm->stream[i], &pcm_tpl->stream[i]);
+		tplg_add_stream_config(&pcm->stream[i], &pcm_tpl->stream[i]);
 
 	/* private data */
 	priv = pcm_tpl->priv;
@@ -1905,7 +1905,7 @@ static int set_link_hw_config(struct snd_soc_tplg_hw_config *cfg,
 }
 
 /* Add a physical DAI link element from C API */
-int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_link_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_link_template *link_tpl = t->link;
 	struct snd_soc_tplg_link_config *link;
@@ -1939,7 +1939,7 @@ int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 		return -EINVAL;
 	link->num_streams = link_tpl->num_streams;
 	for (i = 0; i < link->num_streams; i++)
-		tplg_add_stream_object(&link->stream[i], &link_tpl->stream[i]);
+		tplg_add_stream_config(&link->stream[i], &link_tpl->stream[i]);
 
 	/* HW configs */
 	if (link_tpl->num_hw_configs > SND_SOC_TPLG_HW_CONFIG_MAX)
@@ -1965,7 +1965,7 @@ int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 	return 0;
 }
 
-int tplg_add_dai_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_dai_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_dai_template *dai_tpl = t->dai;
 	struct snd_soc_tplg_dai *dai;
@@ -2134,7 +2134,7 @@ next:
 	pos += sizeof(*pcm) + pcm->priv.size;
 
 	t.pcm = pt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	if (err < 0)
 		return err;
 
@@ -2295,7 +2295,7 @@ next:
 	pos += sizeof(*link) + link->priv.size;
 
 	t.link = &lt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	if (err < 0)
 		return err;
 

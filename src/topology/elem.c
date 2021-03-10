@@ -305,7 +305,7 @@ void tplg_elem_free(struct tplg_elem *elem)
 
 	tplg_ref_free_list(&elem->ref_list);
 
-	/* free struct snd_tplg_ object,
+	/* free struct snd_tplg_ element,
 	 * the union pointers share the same address
 	 */
 	if (elem->obj) {

@@ -159,7 +159,7 @@ struct tplg_elem {
 	int index;
 	enum snd_tplg_type type;
 
-	int size; /* total size of this object inc pdata and ref objects */
+	int size; /* total size of this element inc pdata and ref objects */
 	int compound_elem; /* dont write this element as individual elem */
 	int vendor_type; /* vendor type for private data */
 
@@ -342,11 +342,11 @@ int tplg_add_data(snd_tplg_t *tplg, struct tplg_elem *parent,
 		  const void *bin, size_t size);
 int tplg_add_data_bytes(snd_tplg_t *tplg, struct tplg_elem *parent,
 			const char *suffix, const void *bin, size_t size);
-int tplg_add_mixer_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_enum_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_bytes_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_widget_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_graph_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_mixer_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_enum_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_bytes_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_widget_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_graph_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
 
 int tplg_add_mixer(snd_tplg_t *tplg, struct snd_tplg_mixer_template *mixer,
 		   struct tplg_elem **e);
@@ -358,9 +358,9 @@ int tplg_add_bytes(snd_tplg_t *tplg, struct snd_tplg_bytes_template *bytes_ctl,
 int tplg_build_pcms(snd_tplg_t *tplg, unsigned int type);
 int tplg_build_dais(snd_tplg_t *tplg, unsigned int type);
 int tplg_build_links(snd_tplg_t *tplg, unsigned int type);
-int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_dai_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_link_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_pcm_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_dai_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
 
 int tplg_nice_value_format(char *dst, size_t dst_size, unsigned int value);
 

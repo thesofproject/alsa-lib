@@ -1260,17 +1260,17 @@ int tplg_add_bytes(snd_tplg_t *tplg, struct snd_tplg_bytes_template *bytes_ctl,
 	return 0;
 }
 
-int tplg_add_mixer_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_mixer_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	return tplg_add_mixer(tplg, t->mixer, NULL);
 }
 
-int tplg_add_enum_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_enum_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	return tplg_add_enum(tplg, t->enum_ctl, NULL);
 }
 
-int tplg_add_bytes_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_bytes_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	return tplg_add_bytes(tplg, t->bytes_ctl, NULL);
 }
@@ -1382,7 +1382,7 @@ next:
 	err = tplg_decode_control_mixer1(tplg, &heap, &mt, pos, bin, size2);
 	if (err >= 0) {
 		t.mixer = &mt;
-		err = snd_tplg_add_object(tplg, &t);
+		err = snd_tplg_add_element(tplg, &t);
 	}
 	tplg_free(&heap);
 	if (err < 0)
@@ -1488,7 +1488,7 @@ next:
 	err = tplg_decode_control_enum1(tplg, &heap, &et, pos, ec);
 	if (err >= 0) {
 		t.enum_ctl = &et;
-		err = snd_tplg_add_object(tplg, &t);
+		err = snd_tplg_add_element(tplg, &t);
 	}
 	tplg_free(&heap);
 	if (err < 0)
@@ -1577,7 +1577,7 @@ next:
 		return err;
 
 	t.bytes_ctl = &bt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	if (err < 0)
 		return err;
 

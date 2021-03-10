@@ -663,7 +663,7 @@ int scan_tuple_set(struct tplg_elem *elem, struct tplg_tuple_set *tuple_set,
 	return 0;
 }
 
-/* Add a tuples object to the private buffer of its parent data element */
+/* Add a tuples to the private buffer of its parent data element */
 static int copy_tuples(struct tplg_elem *elem,
 		       struct tplg_vendor_tuples *tuples,
 		       struct tplg_vendor_tokens *tokens)
@@ -717,7 +717,7 @@ static int build_tuples(snd_tplg_t *tplg, struct tplg_elem *elem)
 			return -EINVAL;
 		}
 
-		/* a data object can have multiple tuples objects */
+		/* a data element can have multiple tuples */
 		err = copy_tuples(elem, tuples->tuples, tokens->tokens);
 		if (err < 0)
 			return err;
@@ -1559,7 +1559,7 @@ int tplg_copy_data(snd_tplg_t *tplg, struct tplg_elem *elem,
 	return 0;
 }
 
-/* check data objects and build those with tuples */
+/* check data elements and build those with tuples */
 int tplg_build_data(snd_tplg_t *tplg)
 {
 	struct list_head *base, *pos;

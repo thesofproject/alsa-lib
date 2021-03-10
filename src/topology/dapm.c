@@ -761,7 +761,7 @@ int tplg_add_route(snd_tplg_t *tplg, struct snd_tplg_graph_elem *t, int index)
 	return 0;
 }
 
-int tplg_add_graph_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_graph_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_graph_template *gt =  t->graph;
 	int i, ret;
@@ -775,7 +775,7 @@ int tplg_add_graph_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 	return 0;
 }
 
-int tplg_add_widget_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_widget_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_widget_template *wt = t->widget;
 	struct snd_soc_tplg_dapm_widget *w;
@@ -1022,7 +1022,7 @@ next:
 	}
 
 	t.widget = wt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	tplg_free(&heap);
 	if (err < 0)
 		return err;
@@ -1073,5 +1073,5 @@ int tplg_decode_dapm_graph(snd_tplg_t *tplg,
 	}
 
 	t.graph = gt;
-	return snd_tplg_add_object(tplg, &t);
+	return snd_tplg_add_element(tplg, &t);
 }
