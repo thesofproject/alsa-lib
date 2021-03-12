@@ -23,6 +23,12 @@
 #include <sound/asoc.h>
 #include <sound/tlv.h>
 
+#define TPLG_CLASS_ATTRIBUTE_MASK_MANDATORY	1 << 1
+#define TPLG_CLASS_ATTRIBUTE_MASK_IMMUTABLE	1 << 2
+#define TPLG_CLASS_ATTRIBUTE_MASK_DEPRECATED	1 << 3
+#define TPLG_CLASS_ATTRIBUTE_MASK_AUTOMATIC	1 << 4
+#define TPLG_CLASS_ATTRIBUTE_MASK_UNIQUE	1 << 5
+
 struct tplg_attribute_ref {
 	const char *string;
 	int value;

@@ -151,6 +151,26 @@ static int tplg_parse_class_constraints(snd_tplg_t *tplg, snd_config_t *cfg,
 	return 0;
 }
 
+/* check if mandatory and immutable attributes have been provided a value */
+static bool tplg_class_attribute_sanity_check(struct tplg_class *class)
+{
+	struct list_head *pos;
+
+	list_for_each(pos, &class->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		/* immutable attributes must be provided a value in the class definition */
+		if ((attr->constraint.mask & TPLG_CLASS_ATTRIBUTE_MASK_IMMUTABLE) &&
+		    !attr->found) {
+			SNDERR("Missing value for mmutable attribute '%s'in class '%s'",
+			       attr->name, class->name);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /*
  * Validate attributes that can have an array of values. Note that the array of values
  * is not parsed here and should be handled by the compiler when the object containing
@@ -195,6 +215,107 @@ static int tplg_parse_attribute_compound_value(snd_config_t *cfg, struct tplg_at
 			SNDERR("Invalid value %s for attribute %s\n", s, attr->name);
 			return -EINVAL;
 		}
+	}
+
+	return 0;
+}
+
+/* helper function to get an attribute by name */
+static struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name)
+{
+	struct list_head *pos;
+
+	list_for_each(pos, list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!strcmp(attr->name, name))
+			return attr;
+	}
+
+	return NULL;
+}
+
+/* apply the category mask to the attribute constraint */
+static int tplg_parse_class_attribute_category(snd_config_t *cfg, struct tplg_class *class,
+					       int category)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+
+	snd_config_for_each(i, next, cfg) {
+		struct tplg_attribute *attr;
+		const char *id;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_string(n, &id) < 0) {
+			SNDERR("invalid attribute category name for class %s\n", class->name);
+			return -EINVAL;
+		}
+
+		attr = tplg_get_attribute_by_name(&class->attribute_list, id);
+		if (!attr)
+			continue;
+
+		attr->constraint.mask |= category;
+	}
+
+	return 0;
+}
+
+/*
+ * At the end of class attribute definitions, there could be section categorizing attributes
+ * as mandatory, immutable or deprecated etc. Parse these and apply them to the attribute
+ * constraint.
+ */
+static int tplg_parse_class_attribute_categories(snd_config_t *cfg, struct tplg_class *class)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int category = 0;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		const char *id;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0) {
+			SNDERR("invalid attribute category for class %s\n", class->name);
+			return -EINVAL;
+		}
+
+		if (!strcmp(id, "mandatory"))
+			category = TPLG_CLASS_ATTRIBUTE_MASK_MANDATORY;
+
+		if (!strcmp(id, "immutable"))
+			category = TPLG_CLASS_ATTRIBUTE_MASK_IMMUTABLE;
+
+		if (!strcmp(id, "deprecated"))
+			category = TPLG_CLASS_ATTRIBUTE_MASK_DEPRECATED;
+
+		if (!strcmp(id, "automatic"))
+			category = TPLG_CLASS_ATTRIBUTE_MASK_AUTOMATIC;
+
+		if (!strcmp(id, "unique")) {
+			struct tplg_attribute *unique_attr;
+			const char *s;
+			int err = snd_config_get_string(n, &s);
+			assert(err >= 0);
+
+			unique_attr = tplg_get_attribute_by_name(&class->attribute_list, s);
+			if (!unique_attr)
+				continue;
+
+			unique_attr->constraint.mask |= TPLG_CLASS_ATTRIBUTE_MASK_UNIQUE;
+			continue;
+		}
+
+		if (!category)
+			continue;
+
+		/* apply the constraint to the attribute */
+		ret = tplg_parse_class_attribute_category(n, class, category);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;
@@ -513,6 +634,16 @@ static int tplg_define_class(snd_tplg_t *tplg, snd_config_t *cfg, int type)
 			continue;
 		}
 
+		/* parse attribute constraint category and apply the constraint */
+		if (!strcmp(id, "attributes")) {
+			ret = tplg_parse_class_attribute_categories(n, class);
+			if (ret < 0) {
+				SNDERR("failed to parse attributes for class %s\n", class->name);
+				return ret;
+			}
+			continue;
+		}
+
 		/* class definitions come with default attribute values, process them too */
 		ret = tplg_parse_attribute_value(n, &class->attribute_list);
 		if (ret < 0) {
@@ -521,7 +652,8 @@ static int tplg_define_class(snd_tplg_t *tplg, snd_config_t *cfg, int type)
 		}
 	}
 
-	return 0;
+	/* ensure immutable attributes have been provided values */
+	return tplg_class_attribute_sanity_check(class);
 }
 
 int tplg_define_classes(snd_tplg_t *tplg, snd_config_t *cfg, void *priv ATTRIBUTE_UNUSED)
