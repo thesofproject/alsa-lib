@@ -191,7 +191,7 @@ static int tplg_update_buffer_size(struct tplg_object *buffer_object,
 }
 
 /*
- * Widget names for pipeline endpoints can be of the following type:
+ * Widget names for route source/sink or pipeline endpoints can be of the following type:
  * "Object.class.index" which refers to an object of class "class" with index in the
  * parent object_list or the global topology object_list
  */
@@ -250,17 +250,64 @@ static int tplg_set_widget_name(snd_tplg_t *tplg, struct tplg_object *object,
 		return tplg_set_widget_name(tplg, object, child, new_str, dest_widget);
 	}
 
-	snd_strlcpy(dest_widget->value.string, child->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	/* for endpoint objects, gets the widget name */
+	if (!strcmp(child->class_name, "endpoint")) {
+		struct tplg_attribute *widget_name;
+
+		widget_name = tplg_get_attribute_by_name(&child->attribute_list, "widget_name");
+		snd_strlcpy(dest_widget->value.string, widget_name->value.string,
+			    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	} else {
+		snd_strlcpy(dest_widget->value.string, child->name,
+			    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	}
 
 	return 0;
 }
 
+/* Update Object references for source/sink in route objects */
+static int tplg_update_route_object(snd_tplg_t *tplg, struct tplg_object *object,
+			      struct tplg_object *parent)
+{
+	struct tplg_attribute *widget, *src_widget_name, *sink_widget_name;
+	int ret;
+
+	/* set source widget name */
+	widget = tplg_get_attribute_by_name(&object->attribute_list, "source");
+	src_widget_name = tplg_get_attribute_by_name(&object->attribute_list, "source_widget");
+	ret =  tplg_set_widget_name(tplg, object, parent, widget->value.string,
+				    src_widget_name);
+	if (ret < 0) {
+		SNDERR("Failed to set source widget name for %s\n", object->name);
+		return ret;
+	}
+
+	/* set sink widget name */
+	widget = tplg_get_attribute_by_name(&object->attribute_list, "sink");
+	sink_widget_name = tplg_get_attribute_by_name(&object->attribute_list, "sink_widget");
+	ret = tplg_set_widget_name(tplg, object, parent, widget->value.string,
+				   sink_widget_name);
+	if (ret < 0)
+		SNDERR("Failed to set sink widget name for %s\n", object->name);
+
+	tplg_dbg("route: source: %s -> sink: %s", src_widget_name->value.string,
+		 sink_widget_name->value.string);
+
+	return ret;
+}
 
 int tplg_update_automatic_attributes(snd_tplg_t *tplg, struct tplg_object *object,
 				     struct tplg_object *parent)
 {
 	struct list_head *pos;
 	int ret;
+
+	/* set source/sink widget names for routes */
+	if (!strcmp(object->class_name, "connection")) {
+		ret = tplg_update_route_object(tplg, object, parent);
+		if (ret < 0)
+			return ret;
+	}
 
 	/* set widget name for pipeline endpoint objects */
 	if (!strcmp(object->class_name, "endpoint")) {
