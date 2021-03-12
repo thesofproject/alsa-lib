@@ -70,7 +70,9 @@ struct tplg_object {
 	char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	char class_name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	int num_args;
+	int num_tuple_sets;
 	struct list_head attribute_list;
+	struct list_head tuple_set_list;
 	struct list_head object_list;
 	struct tplg_elem *elem;
 	snd_config_t *cfg;
@@ -97,6 +99,7 @@ struct tplg_object *
 tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class,
 		   struct tplg_object *parent, struct list_head *list);
 struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name);
+int tplg_build_private_data(snd_tplg_t *tplg, struct tplg_object *object);
 void tplg2_free_elem_object(struct tplg_elem *elem);
 struct tplg_object *tplg_object_elem_lookup(snd_tplg_t *tplg, const char *class_name,
 					    char *input);

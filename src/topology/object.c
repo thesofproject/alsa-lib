@@ -619,6 +619,7 @@ static int tplg_copy_object(snd_tplg_t *tplg, struct tplg_object *src, struct tp
 	snd_strlcpy(dest->class_name, src->class_name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
 	dest->type = src->type;
 	dest->cfg = src->cfg;
+	INIT_LIST_HEAD(&dest->tuple_set_list);
 	INIT_LIST_HEAD(&dest->attribute_list);
 	INIT_LIST_HEAD(&dest->object_list);
 
@@ -733,6 +734,7 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	snd_strlcpy(object->name, object_name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
 	snd_strlcpy(object->class_name, class->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
 	object->type = class->type;
+	INIT_LIST_HEAD(&object->tuple_set_list);
 	INIT_LIST_HEAD(&object->attribute_list);
 	INIT_LIST_HEAD(&object->object_list);
 	elem->object = object;
@@ -798,6 +800,266 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 		list_add_tail(&object->list, list);
 
 	return object;
+}
+
+static int tplg2_get_bool(struct tplg_attribute *attr)
+{
+	if (attr->type != SND_CONFIG_TYPE_INTEGER)
+		return -EINVAL;
+
+	if (attr->value.integer != 0 && attr->value.integer != 1)
+		return -EINVAL;
+
+	return attr->value.integer;
+}
+
+static int tplg_get_object_tuple_set(struct tplg_object *object, struct tplg_tuple_set **out,
+				     const char *token_ref)
+{
+	struct list_head *pos, *_pos;
+	struct tplg_tuple_set *set;
+	const char *type;
+	char *tokenref_str;
+	int len, set_type;
+	int size;
+
+	/* get tuple set type */
+	type = strchr(token_ref, '.');
+	if (!type) {
+		SNDERR("No type given for tuple set: '%s' in object: '%s'\n",
+		       token_ref, object->name);
+		return -EINVAL;
+	}
+
+	set_type = get_tuple_type(type + 1);
+	if (set_type < 0) {
+		SNDERR("Invalid type for tuple set: '%s' in object: '%s'\n",
+		       token_ref, object->name);
+		return -EINVAL;
+	}
+
+	/* get tuple token ref name */
+	len = strlen(token_ref) - strlen(type) + 1;
+	tokenref_str = calloc(1, len);
+	snd_strlcpy(tokenref_str, token_ref, len);
+
+	/* realloc set if set is found */
+	list_for_each_safe(pos, _pos, &object->tuple_set_list) {
+		struct tplg_tuple_set *set2;
+
+		set = list_entry(pos, struct tplg_tuple_set, list);
+
+		if (set->type == (unsigned int)set_type && !(strcmp(set->token_ref, tokenref_str))) {
+
+			set->num_tuples++;
+			size = sizeof(*set) + set->num_tuples * sizeof(struct tplg_tuple);
+			set2 = realloc(set, size);
+			if (!set2)
+				return -ENOMEM;
+			list_del(&set->list);
+
+			set = set2;
+			list_add_tail(&set->list, &object->tuple_set_list);
+			*out = set;
+			return 0;
+		}
+	}
+
+	/* else create a new set and add it to the object's tuple_set_list */
+	size = sizeof(*set) + sizeof(struct tplg_tuple);
+	set = calloc(1, size);
+	set->num_tuples = 1;
+	set->type = set_type;
+	snd_strlcpy(set->token_ref, tokenref_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	list_add_tail(&set->list, &object->tuple_set_list);
+	*out = set;
+
+	return 0;
+}
+
+static int tplg_build_object_tuple_set_from_attributes(struct tplg_object *object,
+						       struct tplg_attribute *attr)
+{
+	struct tplg_tuple_set *set;
+	struct tplg_tuple *tuple;
+	struct list_head *pos;
+	int ret;
+
+	/* get tuple set if it exists already or create one */
+	ret = tplg_get_object_tuple_set(object, &set, attr->token_ref);
+	if (ret < 0) {
+		SNDERR("Invalid tuple set for '%s'\n", object->name);
+		return ret;
+	}
+
+	/* update set with new tuple */
+	tuple = &set->tuple[set->num_tuples - 1];
+	snd_strlcpy(tuple->token, attr->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	switch (set->type) {
+	case SND_SOC_TPLG_TUPLE_TYPE_UUID:
+	{
+		const char *value;
+
+		if (snd_config_get_string(attr->cfg, &value) < 0)
+			break;
+		if (get_uuid(value, tuple->uuid) < 0) {
+			SNDERR("failed to get uuid from string %s\n", value);
+			return -EINVAL;
+		}
+		tplg_dbg("\t\tuuid string %s ", value);
+		tplg_dbg("\t\t%s = 0x%x", tuple->token, tuple->uuid);
+		break;
+	}
+	case SND_SOC_TPLG_TUPLE_TYPE_STRING:
+		snd_strlcpy(tuple->string, attr->value.string,
+			    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+		tplg_dbg("\t\t%s = %s", tuple->token, tuple->string);
+		break;
+
+	case SND_SOC_TPLG_TUPLE_TYPE_BOOL:
+	{
+		int ret = tplg2_get_bool(attr);
+
+		if (ret < 0) {
+			SNDERR("Invalid value for tuple %s\n", tuple->token);
+			return tuple->value;
+		}
+		tuple->value = ret;
+		tplg_dbg("\t\t%s = %d", tuple->token, tuple->value);
+		break;
+	}
+	case SND_SOC_TPLG_TUPLE_TYPE_BYTE:
+	case SND_SOC_TPLG_TUPLE_TYPE_SHORT:
+	case SND_SOC_TPLG_TUPLE_TYPE_WORD:
+	{
+		unsigned int tuple_val = 0;
+
+		switch(attr->type) {
+		case SND_CONFIG_TYPE_STRING:
+			if (!attr->constraint.value_ref) {
+				SNDERR("Invalid tuple value type for %s\n", tuple->token);
+				return -EINVAL;
+			}
+
+			/* convert attribute string values to corresponding integer value */
+			list_for_each(pos, &attr->constraint.value_list) {
+				struct tplg_attribute_ref *v;
+
+				v = list_entry(pos, struct tplg_attribute_ref, list);
+				if (!strcmp(attr->value.string, v->string))
+					if (v->value != -EINVAL)
+						tuple_val = v->value;
+			}
+			break;
+		case SND_CONFIG_TYPE_INTEGER:
+			tuple_val = attr->value.integer;
+			break;
+		case SND_CONFIG_TYPE_INTEGER64:
+			tuple_val = attr->value.integer64;
+			break;
+		default:
+			SNDERR("Invalid value type %d for tuple %s for object %s \n", attr->type,
+			       tuple->token, object->name);
+			return -EINVAL;
+		}
+
+		if ((set->type == SND_SOC_TPLG_TUPLE_TYPE_WORD
+				&& tuple_val > UINT_MAX)
+			|| (set->type == SND_SOC_TPLG_TUPLE_TYPE_SHORT
+				&& tuple_val > USHRT_MAX)
+			|| (set->type == SND_SOC_TPLG_TUPLE_TYPE_BYTE
+				&& tuple_val > UCHAR_MAX)) {
+			SNDERR("tuple %s: invalid value", tuple->token);
+			return -EINVAL;
+		}
+
+		tuple->value = tuple_val;
+		tplg_dbg("\t\t%s = 0x%x", tuple->token, tuple->value);
+		break;
+	}
+	default:
+		break;
+	}
+
+	return 0;
+}
+
+/* Build tuple sets from object attributes */
+int tplg_build_object_tuple_sets(struct tplg_object *object)
+{
+	struct list_head *pos;
+	int ret = 0;
+
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (attr->constraint.mask & TPLG_CLASS_ATTRIBUTE_MASK_DEPRECATED) {
+			if (attr->found)
+				SNDERR("Warning: attibute %s decprecated\n", attr->name);
+			continue;
+		}
+
+		if (strcmp(attr->token_ref, "")) {
+			if (!attr->found)
+				continue;
+
+			ret = tplg_build_object_tuple_set_from_attributes(object, attr);
+			if (ret < 0)
+				return ret;
+		}
+	}
+
+	return ret;
+}
+
+int tplg_build_private_data(snd_tplg_t *tplg, struct tplg_object *object)
+{
+	struct snd_soc_tplg_private *priv;
+	struct tplg_elem *data_elem;
+	struct list_head *pos;
+	int ret;
+
+	/* build tuple sets for object */
+	ret = tplg_build_object_tuple_sets(object);
+	if (ret < 0)
+		return ret;
+
+	data_elem = tplg_elem_lookup(&tplg->pdata_list, object->name,
+				      SND_TPLG_TYPE_DATA, SND_TPLG_INDEX_ALL);
+	if(!data_elem)
+		return 0;
+
+	priv = data_elem->data;
+
+	/* build link private data from tuple sets */
+	list_for_each(pos, &object->tuple_set_list) {
+		struct tplg_tuple_set *set = list_entry(pos, struct tplg_tuple_set, list);
+		struct tplg_elem *token_elem;
+
+		if (!set->token_ref) {
+			SNDERR("No valid token ref for tuple set type %d\n", set->type);
+			return -EINVAL;
+		}
+
+		/* get reference token elem */
+		token_elem = tplg_elem_lookup(&tplg->token_list, set->token_ref,
+					      SND_TPLG_TYPE_TOKEN, SND_TPLG_INDEX_ALL);
+		if (!token_elem) {
+			SNDERR("No valid tokens for ref %s\n", set->token_ref);
+			return -EINVAL;
+		}
+
+		ret = scan_tuple_set(data_elem, set, token_elem->tokens, priv ? priv->size : 0);
+		if (ret < 0)
+			return ret;
+
+		/* priv gets modified while scanning new sets */
+		priv = data_elem->data;
+	}
+
+	tplg_dbg("Object %s built", object->name);
+
+	return 0;
 }
 
 static int tplg_build_manifest_object(snd_tplg_t *tplg, struct tplg_object *object) {
@@ -992,6 +1254,7 @@ void tplg2_free_elem_object(struct tplg_elem *elem)
 	struct tplg_object *object = elem->object;
 	struct list_head *pos, *npos;
         struct tplg_attribute *attr;
+        struct tplg_tuple_set *set;
 
 	/*
 	 * free args, attributes and tuples. Child objects will be freed when
@@ -1001,5 +1264,11 @@ void tplg2_free_elem_object(struct tplg_elem *elem)
 		attr = list_entry(pos, struct tplg_attribute, list);
 		list_del(&attr->list);
                 free(attr);
+        }
+
+	list_for_each_safe(pos, npos, &object->tuple_set_list) {
+                set = list_entry(pos, struct tplg_tuple_set, list);
+                list_del(&set->list);
+                free(set);
         }
 }
