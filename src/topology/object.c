@@ -540,6 +540,67 @@ static int tplg_object_set_unique_attribute(struct tplg_object *object, snd_conf
 	return 0;
 }
 
+static int tplg_object_attributes_sanity_check(struct tplg_object *object)
+{
+	struct list_head *pos;
+
+	/* sanity check for object attributes */
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		/* check if mandatory and value provided */
+		if ((attr->constraint.mask & TPLG_CLASS_ATTRIBUTE_MASK_MANDATORY) &&
+		    !(attr->constraint.mask & TPLG_CLASS_ATTRIBUTE_MASK_IMMUTABLE) &&
+		    !attr->found) {
+			SNDERR("Mandatory attribute %s not found for object %s\n", attr->name,
+			       object->name);
+			return -EINVAL;
+		}
+
+		/* translate string values to integer if needed to be added to private data */
+		switch (attr->type) {
+		case SND_CONFIG_TYPE_STRING:
+		{
+			struct list_head *pos1;
+
+			/* skip attributes with no pre-defined valid values */
+			if (list_empty(&attr->constraint.value_list))
+				continue;
+
+			/* Translate the string value to integer if needed */
+			list_for_each(pos1, &attr->constraint.value_list) {
+				struct tplg_attribute_ref *v;
+
+				v = list_entry(pos1, struct tplg_attribute_ref, list);
+
+				if (!strcmp(attr->value.string, v->string)) {
+					if (v->value != -EINVAL) {
+						attr->value.integer = v->value;
+						attr->type = SND_CONFIG_TYPE_INTEGER;
+					}
+					break;
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	/* recursively check all child objects */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+		int ret;
+
+		ret = tplg_object_attributes_sanity_check(child);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+
 /* Copy object from class definition and create the topology element for the newly copied object */
 static int tplg_copy_object(snd_tplg_t *tplg, struct tplg_object *src, struct tplg_object *dest,
 			     struct list_head *list)
@@ -739,6 +800,129 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	return object;
 }
 
+static int tplg_build_manifest_object(snd_tplg_t *tplg, struct tplg_object *object) {
+	struct snd_soc_tplg_manifest *manifest;
+	struct tplg_elem *m_elem;
+	struct list_head *pos;
+	int ret;
+
+	if (!list_empty(&tplg->manifest_list)) {
+		SNDERR("Manifest data already exists");
+		return -EINVAL;
+	}
+
+	m_elem = tplg_elem_new_common(tplg, NULL, object->name, SND_TPLG_TYPE_MANIFEST);
+	if (!m_elem)
+		return -ENOMEM;
+
+	manifest = m_elem->manifest;
+	manifest->size = m_elem->size;
+
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		if (!object->cfg)
+			continue;
+
+		if (!strcmp(child->class_name, "data")) {
+			struct tplg_attribute *name;
+
+			name = tplg_get_attribute_by_name(&object->attribute_list, "name");
+
+			ret = tplg_ref_add(m_elem, SND_TPLG_TYPE_DATA, name->value.string);
+			if (ret < 0) {
+				SNDERR("failed to add data elem %s to manifest elem %s\n",
+				       name->value.string, m_elem->id);
+				return ret;
+			}
+		}
+	}
+
+	tplg_dbg(" Manifest: %s", m_elem->id);
+
+	return 0;
+}
+
+static int tplg_build_data_object(snd_tplg_t *tplg, struct tplg_object *object) {
+	struct tplg_attribute *bytes, *name;
+	struct tplg_elem *data_elem;
+	int ret;
+
+	name = tplg_get_attribute_by_name(&object->attribute_list, "name");
+	if (!name) {
+		SNDERR("invalid name for data object: %s", object->name);
+		return -EINVAL;
+	}
+
+	/* check if data elem exists already */
+	data_elem = tplg_elem_lookup(&tplg->widget_list, name->value.string,
+				      SND_TPLG_TYPE_DATA, SND_TPLG_INDEX_ALL);
+	if (!data_elem) {
+		/* create data elem */
+		data_elem = tplg_elem_new_common(tplg, NULL, name->value.string,
+						 SND_TPLG_TYPE_DATA);
+	        if (!data_elem) {
+			SNDERR("failed to create data elem for %s\n", object->name);
+	                return -EINVAL;
+		}
+	}
+
+	bytes = tplg_get_attribute_by_name(&object->attribute_list, "bytes");
+
+	if (!bytes || !bytes->cfg)
+		return 0;
+
+	ret = tplg_parse_data_hex(bytes->cfg, data_elem, 1);
+	if (ret < 0)
+		SNDERR("failed to parse byte for data: %s", object->name);
+
+	tplg_dbg("data: %s", name->value.string);
+
+	return ret;
+}
+
+
+static int tplg_build_base_object(snd_tplg_t *tplg, struct tplg_object *object)
+{
+	if (!strcmp(object->class_name, "manifest"))
+		return tplg_build_manifest_object(tplg, object);
+
+	if (!strcmp(object->class_name, "data"))
+		return tplg_build_data_object(tplg, object);
+
+	return 0;
+}
+
+static int tplg_build_object(snd_tplg_t *tplg, struct tplg_object *object)
+{
+	struct list_head *pos;
+	int ret;
+
+	switch (object->type) {
+	case SND_TPLG_CLASS_TYPE_BASE:
+		ret = tplg_build_base_object(tplg, object);
+		if (ret < 0) {
+			SNDERR("Failed to build object %s\n", object->name);
+			return ret;
+		}
+		break;
+	}
+
+	/* build child objects */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		ret = tplg_build_object(tplg, child);
+		if (ret < 0) {
+			SNDERR("Failed to build object\n", child->name);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+
 int tplg_create_new_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_elem *class_elem)
 {
 	snd_config_iterator_t i, next;
@@ -746,6 +930,7 @@ int tplg_create_new_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_elem
 	struct tplg_object *object;
 	snd_config_t *n;
 	const char *id;
+	int ret;
 
 	/* create all objects of the same class type */
 	snd_config_for_each(i, next, cfg) {
@@ -760,6 +945,20 @@ int tplg_create_new_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_elem
 		 */
 		object = tplg_create_object(tplg, n, class_elem->class, NULL, NULL);
 		if (!object) {
+			SNDERR("Error creating object for class %s\n", class->name);
+			return -EINVAL;
+		}
+
+		/* check if all mandatory values are present and translate string values to integer */
+		ret = tplg_object_attributes_sanity_check(object);
+		if (ret < 0) {
+			SNDERR("Object %s failed sanity check\n", object->name);
+			return -EINVAL;
+		}
+
+		/* Build the object by creating the topology element */
+		ret = tplg_build_object(tplg, object);
+		if (ret < 0) {
 			SNDERR("Error creating object for class %s\n", class->name);
 			return -EINVAL;
 		}
