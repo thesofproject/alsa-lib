@@ -766,6 +766,7 @@ enum snd_tplg_type {
 	SND_TPLG_TYPE_LINK,		/*!< Physical DAI link */
 	SND_TPLG_TYPE_HW_CONFIG,	/*!< Link HW config */
 	SND_TPLG_TYPE_DAI,		/*!< Physical DAI */
+	SND_TPLG_TYPE_CLASS,		/*!< Class */
 };
 
 /** Fit for all user cases */

@@ -30,8 +30,9 @@ libatopology_la_SOURCES =\
 	elem.c \
 	save.c \
 	decoder.c \
-	log.c
+	log.c \
+	class.c
 
-noinst_HEADERS = tplg_local.h
+noinst_HEADERS = tplg_local.h tplg2_local.h
 
 AM_CPPFLAGS=-I$(top_srcdir)/include

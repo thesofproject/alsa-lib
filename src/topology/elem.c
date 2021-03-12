@@ -19,6 +19,7 @@
 
 #include "list.h"
 #include "tplg_local.h"
+#include "tplg2_local.h"
 
 struct tplg_table tplg_table[] = {
 	{
@@ -226,6 +227,14 @@ struct tplg_table tplg_table[] = {
 		.enew  = 1,
 		.parse = tplg_parse_hw_config,
 		.save  = tplg_save_hw_config,
+	},
+	{
+		.name  = "Class Definition",
+		.id    = "Class",
+		.loff  = offsetof(snd_tplg_t, class_list),
+		.type  = SND_TPLG_TYPE_CLASS,
+		.enew  = 1,
+		.parse = tplg_define_classes,
 	}
 };
 
@@ -302,6 +311,9 @@ struct tplg_elem *tplg_elem_new(void)
 void tplg_elem_free(struct tplg_elem *elem)
 {
 	list_del(&elem->list);
+
+	if (elem->type == SND_TPLG_TYPE_CLASS)
+		tplg2_free_elem_class(elem);
 
 	tplg_ref_free_list(&elem->ref_list);
 
