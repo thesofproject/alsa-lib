@@ -164,7 +164,8 @@ static int tplg_object_set_unique_attribute(struct tplg_object *object, snd_conf
  * the class definition
  */
 struct tplg_object *
-tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class)
+tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class,
+		   struct tplg_object *parent ATTRIBUTE_UNUSED, struct list_head *list)
 {
 	struct tplg_object *object;
 	struct tplg_elem *elem;
@@ -237,6 +238,9 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 		return NULL;
 	}
 
+	if (list)
+		list_add_tail(&object->list, list);
+
 	return object;
 }
 
@@ -259,7 +263,7 @@ int tplg_create_new_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_elem
 		 * Create object by duplicating the attributes and child objects from the class
 		 * definiion
 		 */
-		object = tplg_create_object(tplg, n, class_elem->class);
+		object = tplg_create_object(tplg, n, class_elem->class, NULL, NULL);
 		if (!object) {
 			SNDERR("Error creating object for class %s\n", class->name);
 			return -EINVAL;
