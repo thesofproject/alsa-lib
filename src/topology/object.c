@@ -106,6 +106,82 @@ struct tplg_object *tplg_object_lookup_in_list(struct list_head *list, const cha
         return NULL;
 }
 
+/* Set child object attributes */
+static int tplg_set_child_attributes(snd_tplg_t *tplg, snd_config_t *cfg,
+				     struct tplg_object *object)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		snd_config_iterator_t first, second;
+		snd_config_t *first_cfg, *second_cfg;
+		struct tplg_elem *class_elem;
+		struct tplg_object *child;
+		const char *class_name, *index_str, *attribute_name;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &class_name) < 0)
+			continue;
+
+		if (snd_config_get_type(n) != SND_CONFIG_TYPE_COMPOUND)
+	                continue;
+
+		/* check if it is a valid class name */
+		class_elem = tplg_elem_lookup(&tplg->class_list, class_name,
+					      SND_TPLG_TYPE_CLASS, SND_TPLG_INDEX_ALL);
+		if (!class_elem)
+			continue;
+
+		/* get index */
+		first = snd_config_iterator_first(n);
+		first_cfg = snd_config_iterator_entry(first);
+		if (snd_config_get_id(first_cfg, &index_str) < 0)
+			continue;
+
+		if (snd_config_get_type(first_cfg) != SND_CONFIG_TYPE_COMPOUND) {
+			SNDERR("No attribute name for child %s.%s\n", class_name, index_str);
+			return -EINVAL;
+		}
+
+		/* the next node can either be an attribute name or a child class */
+		second = snd_config_iterator_first(first_cfg);
+		second_cfg = snd_config_iterator_entry(second);
+		if (snd_config_get_id(second_cfg, &attribute_name) < 0)
+			continue;
+
+		/* get object of type class_name and unique attribute value */
+		child = tplg_object_lookup_in_list(&object->object_list, class_name, (char *)index_str);
+		if (!child) {
+			SNDERR("No child %s.%s found for object %s\n",
+				class_name, index_str, object->name);
+			return -EINVAL;
+		}
+
+		/*
+		 * if the second conf node is an attribute name, set the value but do not
+		 * override the object value if already set.
+		 */
+		if (snd_config_get_type(second_cfg) != SND_CONFIG_TYPE_COMPOUND) {
+			ret = tplg_parse_attribute_value(second_cfg, &child->attribute_list, false);
+
+			if (ret < 0) {
+				SNDERR("Failed to set attribute for object %s\n", object->name);
+				return ret;
+			}
+			continue;
+		}
+
+		/* otherwise pass it down to the child object */
+		ret = tplg_set_child_attributes(tplg, first_cfg, child);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+
 /* Process the attribute values provided during object instantiation */
 static int tplg_process_attributes(snd_config_t *cfg, struct tplg_object *object)
 {
@@ -228,6 +304,141 @@ static int tplg_create_child_objects(snd_tplg_t *tplg, snd_config_t *cfg,
 		if (ret < 0) {
 			SNDERR("Error creating child objects for %s\n", parent->name);
 			return ret;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Child objects could have arguments inherited from the parent. Update the name now that the
+ * parent has been instantiated and values updated.
+ */
+static int tplg_update_object_name_from_args(struct tplg_object *object)
+{
+	struct list_head *pos;
+	char string[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	int ret;
+
+	snprintf(string, SNDRV_CTL_ELEM_ID_NAME_MAXLEN, "%s", object->class_name);
+
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+		char new_str[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+
+		if (attr->param_type != TPLG_CLASS_PARAM_TYPE_ARGUMENT)
+			continue;
+
+		switch (attr->type) {
+		case SND_CONFIG_TYPE_INTEGER:
+			ret = snprintf(new_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN, "%s.%ld",
+				 string, attr->value.integer);
+			if (ret > SNDRV_CTL_ELEM_ID_NAME_MAXLEN) {
+				SNDERR("Object name too long for %s\n", object->name);
+				return -EINVAL;
+			}
+			snd_strlcpy(string, new_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+			break;
+		case SND_CONFIG_TYPE_STRING:
+			ret = snprintf(new_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN, "%s.%s",
+				 string, attr->value.string);
+			if (ret > SNDRV_CTL_ELEM_ID_NAME_MAXLEN) {
+				SNDERR("Object name too long for %s\n", object->name);
+				return -EINVAL;
+			}
+			snd_strlcpy(string, new_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+			break;
+		default:
+			break;
+		}
+	}
+
+	snd_strlcpy(object->name, string, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+
+	return 0;
+}
+
+/* update attributes inherited from parent */
+static int tplg_update_attributes_from_parent(struct tplg_object *object,
+					    struct tplg_object *ref_object)
+{
+	struct list_head *pos, *pos1;
+
+	/* update object attribute values from reference object */
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr =  list_entry(pos, struct tplg_attribute, list);
+
+		if (attr->found)
+			continue;
+
+		list_for_each(pos1, &ref_object->attribute_list) {
+			struct tplg_attribute *ref_attr;
+
+			ref_attr = list_entry(pos1, struct tplg_attribute, list);
+			if (!ref_attr->found)
+				continue;
+
+			if (!strcmp(attr->name, ref_attr->name)) {
+				switch (ref_attr->type) {
+				case SND_CONFIG_TYPE_INTEGER:
+					attr->value.integer = ref_attr->value.integer;
+					attr->type = ref_attr->type;
+					break;
+				case SND_CONFIG_TYPE_INTEGER64:
+					attr->value.integer64 = ref_attr->value.integer64;
+					attr->type = ref_attr->type;
+					break;
+				case SND_CONFIG_TYPE_STRING:
+					snd_strlcpy(attr->value.string,
+						    ref_attr->value.string,
+						    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+					attr->type = ref_attr->type;
+					break;
+				case SND_CONFIG_TYPE_REAL:
+					attr->value.d = ref_attr->value.d;
+					attr->type = ref_attr->type;
+					break;
+				default:
+					SNDERR("Unsupported type %d for attribute %s\n",
+						attr->type, attr->name);
+					return -EINVAL;
+				}
+				attr->found = true;
+			}
+		}
+	}
+
+	return 0;
+}
+
+/* Propdagate the updated attribute values to child o bjects */
+static int tplg_process_child_objects(struct tplg_object *parent)
+{
+	struct list_head *pos;
+	int ret;
+
+	list_for_each(pos, &parent->object_list) {
+		struct tplg_object *object = list_entry(pos, struct tplg_object, list);
+
+		/* update attribute values inherited from parent */
+		ret = tplg_update_attributes_from_parent(object, parent);
+		if (ret < 0) {
+			SNDERR("failed to update arguments for %s\n", object->name);
+			return ret;
+		}
+
+		/* update object name after args update */
+		ret = tplg_update_object_name_from_args(object);
+		if (ret < 0)
+			return ret;
+
+		/* update the object elem ID as well */
+		snd_strlcpy(object->elem->id, object->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+
+		/* now process its child objects */
+		ret = tplg_process_child_objects(object);
+		if (ret < 0) {
+			SNDERR("Cannot update child object for %s\n", object->name);
 		}
 	}
 
@@ -505,6 +716,20 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	ret = tplg_create_child_objects(tplg, cfg, object);
 	if (ret < 0) {
 		SNDERR("failed to create child objects for %s\n", object->name);
+		return NULL;
+	}
+
+	/* pass down the object attributes to its child objects */
+	ret = tplg_process_child_objects(object);
+	if (ret < 0) {
+		SNDERR("failed to create child objects for %s\n", object->name);
+		return NULL;
+	}
+
+	/* process child object attributes set explictly in the parent object */
+	ret = tplg_set_child_attributes(tplg, cfg, object);
+	if (ret < 0) {
+		SNDERR("failed to set child attributes for %s\n", object->name);
 		return NULL;
 	}
 
