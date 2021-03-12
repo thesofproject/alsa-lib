@@ -782,6 +782,13 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 
 	/* sanity check */
 	switch(object->type) {
+	case SND_TPLG_CLASS_TYPE_PIPELINE:
+		ret = tplg_create_pipeline_object(class, object);
+		if (ret < 0) {
+			SNDERR("Failed to create pipeline object for %s\n", object->name);
+			return NULL;
+		}
+		break;
 	case SND_TPLG_CLASS_TYPE_DAI:
 		ret = tplg_create_dai_object(class, object);
 		if (ret < 0) {

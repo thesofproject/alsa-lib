@@ -35,7 +35,8 @@ libatopology_la_SOURCES =\
 	object.c \
 	dapm-object.c \
 	pcm-object.c \
-	dai-object.c
+	dai-object.c \
+	custom-object.c
 
 noinst_HEADERS = tplg_local.h tplg2_local.h
 
