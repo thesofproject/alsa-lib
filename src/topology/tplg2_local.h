@@ -71,6 +71,7 @@ struct tplg_object {
 	char class_name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	int num_args;
 	struct list_head attribute_list;
+	struct list_head object_list;
 	struct tplg_elem *elem;
 	snd_config_t *cfg;
 	int type;

@@ -157,6 +157,89 @@ static int tplg_object_set_unique_attribute(struct tplg_object *object, snd_conf
 	return 0;
 }
 
+/* Copy object from class definition and create the topology element for the newly copied object */
+static int tplg_copy_object(snd_tplg_t *tplg, struct tplg_object *src, struct tplg_object *dest,
+			     struct list_head *list)
+{
+	struct tplg_elem *elem;
+	struct list_head *pos;
+	int ret;
+
+	if (!src || !dest) {
+		SNDERR("Invalid src/dest object\n");
+		return -EINVAL;
+	}
+
+	dest->num_args = src->num_args;
+	snd_strlcpy(dest->name, src->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	snd_strlcpy(dest->class_name, src->class_name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	dest->type = src->type;
+	dest->cfg = src->cfg;
+	INIT_LIST_HEAD(&dest->attribute_list);
+	INIT_LIST_HEAD(&dest->object_list);
+
+	/* copy attributes */
+	list_for_each(pos, &src->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+		struct tplg_attribute *new_attr = calloc(1, sizeof(*attr));
+
+		if (!new_attr)
+			return -ENOMEM;
+
+		ret = tplg_copy_attribute(new_attr, attr);
+		if (ret < 0) {
+			SNDERR("Error copying attribute %s\n", attr->name);
+			free(new_attr);
+			return -ENOMEM;
+		}
+		list_add_tail(&new_attr->list, &dest->attribute_list);
+	}
+
+	/* copy its child objects */
+	list_for_each(pos, &src->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+		struct tplg_object *new_child = calloc(1, sizeof(*new_child));
+
+		ret = tplg_copy_object(tplg, child, new_child, &dest->object_list);
+		if (ret < 0) {
+			SNDERR("error copying child object %s\n", child->name);
+			return ret;
+		}
+	}
+
+	/* create tplg elem of type SND_TPLG_TYPE_OBJECT */
+	elem = tplg_elem_new_common(tplg, NULL, dest->name, SND_TPLG_TYPE_OBJECT);
+	if (!elem)
+		return -ENOMEM;
+	elem->object = dest;
+	dest->elem = elem;
+
+	list_add_tail(&dest->list, list);
+	return 0;
+}
+
+/* class definitions may have pre-defined objects. Copy these into the object */
+static int tplg_copy_child_objects(snd_tplg_t *tplg, struct tplg_class *class,
+				  struct tplg_object *object)
+{
+	struct list_head *pos;
+	int ret;
+
+	/* copy child objects */
+	list_for_each(pos, &class->object_list) {
+		struct tplg_object *obj = list_entry(pos, struct tplg_object, list);
+		struct tplg_object *new_obj = calloc(1, sizeof(*obj));
+
+		ret = tplg_copy_object(tplg, obj, new_obj, &object->object_list);
+		if (ret < 0) {
+			free(new_obj);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Create an object of class "class" by copying the attribute list, number of arguments
  * and default attribute values from the class definition. Objects can also be given
@@ -207,6 +290,7 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	snd_strlcpy(object->class_name, class->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
 	object->type = class->type;
 	INIT_LIST_HEAD(&object->attribute_list);
+	INIT_LIST_HEAD(&object->object_list);
 	elem->object = object;
 
 	/* copy attributes from class */
@@ -235,6 +319,13 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	ret = tplg_process_attributes(cfg, object);
 	if (ret < 0) {
 		SNDERR("Failed to process attributes for %s\n", object->name);
+		return NULL;
+	}
+
+	/* now copy child objects */
+	ret = tplg_copy_child_objects(tplg, class, object);
+	if (ret < 0) {
+		SNDERR("Failed to create DAI object for %s\n", object->name);
 		return NULL;
 	}
 
