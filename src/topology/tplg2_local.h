@@ -32,7 +32,8 @@ struct tplg_attribute {
 	char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	snd_config_type_t type;
 	enum tplg_class_param_type param_type;
-	struct list_head list; /* item in class/object attribute list */
+	char token_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	struct list_head list; /* item in attribute list */
 	union {
 		long integer;
 		long long integer64;
