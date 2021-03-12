@@ -66,6 +66,20 @@ struct tplg_attribute {
 	}value;
 };
 
+struct tplg_dai_object {
+	struct tplg_elem *link_elem;
+	int num_hw_configs;
+};
+
+struct tplg_pipeline_object {
+	struct tplg_object *pipe_widget_object;
+};
+
+struct tplg_comp_object {
+	struct tplg_elem *widget_elem;
+	int widget_id;
+};
+
 struct tplg_object {
 	char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	char class_name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
@@ -78,10 +92,20 @@ struct tplg_object {
 	snd_config_t *cfg;
 	int type;
 	struct list_head list; /* item in parent object list */
+	union {
+		struct tplg_comp_object component;
+		struct tplg_dai_object dai;
+		struct tplg_pipeline_object pipeline;
+	}object_type;
 };
 
 /* class types */
 #define SND_TPLG_CLASS_TYPE_BASE		0
+#define SND_TPLG_CLASS_TYPE_COMPONENT		1
+#define SND_TPLG_CLASS_TYPE_PIPELINE		2
+#define SND_TPLG_CLASS_TYPE_DAI		3
+#define SND_TPLG_CLASS_TYPE_CONTROL		4
+#define SND_TPLG_CLASS_TYPE_PCM		5
 
 struct tplg_class {
 	char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];

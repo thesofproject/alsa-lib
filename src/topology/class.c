@@ -21,6 +21,29 @@
 #include "tplg2_local.h"
 #include <ctype.h>
 
+/* mapping of widget text names to types */
+static const struct map_elem class_map[] = {
+	{"Base", SND_TPLG_CLASS_TYPE_BASE},
+	{"Pipeline", SND_TPLG_CLASS_TYPE_PIPELINE},
+	{"Component", SND_TPLG_CLASS_TYPE_COMPONENT},
+	{"Control", SND_TPLG_CLASS_TYPE_CONTROL},
+	{"Dai", SND_TPLG_CLASS_TYPE_DAI},
+	{"PCM", SND_TPLG_CLASS_TYPE_PCM},
+};
+
+
+int lookup_class_type(const char *c)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(class_map); i++) {
+		if (strcmp(class_map[i].name, c) == 0)
+			return class_map[i].id;
+	}
+
+	return -EINVAL;
+}
+
 /* save valid values for attributes */
 static int tplg_parse_constraint_valid_values(snd_tplg_t *tplg, snd_config_t *cfg,
 					      struct attribute_constraint *c,
@@ -734,10 +757,17 @@ int tplg_define_classes(snd_tplg_t *tplg, snd_config_t *cfg, void *priv ATTRIBUT
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
 	const char *id;
-	int ret;
+	int class, ret;
 
 	if (snd_config_get_id(cfg, &id) < 0)
 		return -EINVAL;
+
+	/* classes must belong to one of the pre-defined types */
+	class = lookup_class_type(id);
+	if (class < 0) {
+		SNDERR("Invalid class type %s\n", id);
+		return -EINVAL;
+	}
 
 	/* create class */
 	snd_config_for_each(i, next, cfg) {
@@ -745,7 +775,7 @@ int tplg_define_classes(snd_tplg_t *tplg, snd_config_t *cfg, void *priv ATTRIBUT
 		if (snd_config_get_id(n, &id) < 0)
 			continue;
 
-		ret = tplg_define_class(tplg, n, SND_TPLG_CLASS_TYPE_BASE);
+		ret = tplg_define_class(tplg, n, class);
 		if (ret < 0) {
 			SNDERR("Failed to create class %s\n", id);
 			return ret;
