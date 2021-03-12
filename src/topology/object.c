@@ -640,6 +640,19 @@ static int tplg_copy_object(snd_tplg_t *tplg, struct tplg_object *src, struct tp
 		list_add_tail(&new_attr->list, &dest->attribute_list);
 	}
 
+	switch(src->type) {
+	case SND_TPLG_CLASS_TYPE_COMPONENT:
+	{
+		struct tplg_comp_object *dest_comp_object = &dest->object_type.component;
+		struct tplg_comp_object *src_comp_object = &src->object_type.component;
+
+		memcpy(dest_comp_object, src_comp_object, sizeof(*dest_comp_object));
+		break;
+	}
+	default:
+		break;
+	}
+
 	/* copy its child objects */
 	list_for_each(pos, &src->object_list) {
 		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
@@ -766,6 +779,19 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	if (ret < 0) {
 		SNDERR("Failed to process attributes for %s\n", object->name);
 		return NULL;
+	}
+
+	/* sanity check */
+	switch(object->type) {
+	case SND_TPLG_CLASS_TYPE_COMPONENT:
+		ret = tplg_create_component_object(object);
+		if (ret < 0) {
+			SNDERR("Failed to create component object for %s\n", object->name);
+			return NULL;
+		}
+		break;
+	default:
+		break;
 	}
 
 	/* now copy child objects */
@@ -1161,6 +1187,15 @@ static int tplg_build_object(snd_tplg_t *tplg, struct tplg_object *object)
 	int ret;
 
 	switch (object->type) {
+	case SND_TPLG_CLASS_TYPE_COMPONENT:
+	{
+		ret = tplg_build_comp_object(tplg, object);
+		if (ret < 0) {
+			SNDERR("Failed to build comp object %s\n", object->name);
+			return ret;
+		}
+		break;
+	}
 	case SND_TPLG_CLASS_TYPE_BASE:
 		ret = tplg_build_base_object(tplg, object);
 		if (ret < 0) {

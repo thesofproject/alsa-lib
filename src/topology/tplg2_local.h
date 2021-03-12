@@ -124,6 +124,8 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 		   struct tplg_object *parent, struct list_head *list);
 struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name);
 int tplg_build_private_data(snd_tplg_t *tplg, struct tplg_object *object);
+int tplg_build_comp_object(snd_tplg_t *tplg, struct tplg_object *object);
+int tplg_create_component_object(struct tplg_object *object);
 void tplg2_free_elem_object(struct tplg_elem *elem);
 struct tplg_object *tplg_object_elem_lookup(snd_tplg_t *tplg, const char *class_name,
 					    char *input);
