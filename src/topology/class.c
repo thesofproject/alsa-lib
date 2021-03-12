@@ -21,18 +21,160 @@
 #include "tplg2_local.h"
 #include <ctype.h>
 
-static int tplg_parse_class_attribute(snd_tplg_t *tplg ATTRIBUTE_UNUSED, snd_config_t *cfg,
+/* save valid values for attributes */
+static int tplg_parse_constraint_valid_values(snd_tplg_t *tplg, snd_config_t *cfg,
+					      struct attribute_constraint *c,
+					      char *name)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int err;
+
+	snd_config_for_each(i, next, cfg) {
+		struct tplg_attribute_ref *v;
+		const char *id, *s;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0) {
+			SNDERR("invalid reference value for '%s'\n", name);
+			return -EINVAL;
+		}
+
+		err = snd_config_get_string(n, &s);
+		if (err < 0) {
+			SNDERR("Invalid value for '%s'\n", name);
+			return err;
+		}
+
+		v = calloc(1, sizeof(*v));
+
+		/*
+		 * some attributes come with valid string values that translate to integer values
+		 */
+		if (c->value_ref) {
+			struct tplg_elem *token_elem;
+
+			v->string = s;
+
+			/* get reference token elem */
+			token_elem = tplg_elem_lookup(&tplg->token_list,
+						      c->value_ref,
+						      SND_TPLG_TYPE_TOKEN, SND_TPLG_INDEX_ALL);
+			if (!token_elem) {
+				SNDERR("No valid token elem for ref '%s'\n",
+					c->value_ref);
+				free(v);
+				return -EINVAL;
+			}
+
+			/* save the value corresponding to the string */
+			v->value = get_token_value(s, token_elem->tokens);
+		} else {
+			/* others just have valid string values */
+			v->string = s;
+			v->value = -EINVAL;
+		}
+
+		list_add(&v->list, &c->value_list);
+	}
+
+	return 0;
+}
+
+/*
+ * Attributes can be associated with constraints such as min, max values.
+ * Some attributes could also have pre-defined valid values.
+ * The pre-defined values are human-readable values that sometimes need to be translated
+ * to tuple values for provate data. For ex: the value "playback" and "capture" for
+ * direction attributes need to be translated to 0 and 1 respectively for a DAI widget
+ */
+static int tplg_parse_class_constraints(snd_tplg_t *tplg, snd_config_t *cfg,
+					struct attribute_constraint *c, char *name)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int err;
+
+	snd_config_for_each(i, next, cfg) {
+		const char *id, *s;
+		long v;
+
+		n = snd_config_iterator_entry(i);
+
+		if (snd_config_get_id(n, &id) < 0)
+			continue;
+
+		/* set min value constraint */
+		if (!strcmp(id, "min")) {
+			err = snd_config_get_integer(n, &v);
+			if (err < 0) {
+				SNDERR("Invalid min constraint for %s\n", name);
+				return err;
+			}
+			c->min = v;
+			continue;
+		}
+
+		/* set max value constraint */
+		if (!strcmp(id, "max")) {
+			err = snd_config_get_integer(n, &v);
+			if (err < 0) {
+				SNDERR("Invalid min constraint for %s\n", name);
+				return err;
+			}
+			c->max = v;
+			continue;
+		}
+
+		/* parse reference for string values that need to be translated to tuple values */
+		if (!strcmp(id, "value_ref")) {
+			err = snd_config_get_string(n, &s);
+			if (err < 0) {
+				SNDERR("Invalid value ref for %s\n", name);
+				return err;
+			}
+			c->value_ref = s;
+			continue;
+		}
+
+		/* parse the list of valid values */
+		if (!strcmp(id, "values")) {
+			err = tplg_parse_constraint_valid_values(tplg, n, c, name);
+			if (err < 0) {
+				SNDERR("Error parsing valid values for %s\n", name);
+				return err;
+			}
+			continue;
+		}
+	}
+
+	return 0;
+}
+
+static int tplg_parse_class_attribute(snd_tplg_t *tplg, snd_config_t *cfg,
 				      struct tplg_attribute *attr)
 {
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
 	const char *id;
+	int ret;
 
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
 
 		if (snd_config_get_id(n, &id) < 0)
 			continue;
+
+		/* Parse class attribute constraints */
+		if (!strcmp(id, "constraints")) {
+			ret = tplg_parse_class_constraints(tplg, n, &attr->constraint,
+								     attr->name);
+			if (ret < 0) {
+				SNDERR("Error parsing constraints for %s\n", attr->name);
+				return -EINVAL;
+			}
+			continue;
+		}
 
 		/*
 		 * Parse token reference for class attributes/arguments. The token_ref field stores the
@@ -56,8 +198,9 @@ static int tplg_parse_class_attribute(snd_tplg_t *tplg ATTRIBUTE_UNUSED, snd_con
 	return 0;
 }
 
+
 /* Parse class attributes/arguments and add to class attribute_list */
-static int tplg_parse_class_attributes(snd_tplg_t *tplg ATTRIBUTE_UNUSED, snd_config_t *cfg,
+static int tplg_parse_class_attributes(snd_tplg_t *tplg, snd_config_t *cfg,
 				       struct tplg_class *class, int type)
 {
 	snd_config_iterator_t i, next;
@@ -74,6 +217,11 @@ static int tplg_parse_class_attributes(snd_tplg_t *tplg ATTRIBUTE_UNUSED, snd_co
 		attr->param_type = type;
 		if (type == TPLG_CLASS_PARAM_TYPE_ARGUMENT)
 			j++;
+
+		/* init attribute */
+		INIT_LIST_HEAD(&attr->constraint.value_list);
+		attr->constraint.min = INT_MIN;
+		attr->constraint.max = INT_MAX;
 
 		n = snd_config_iterator_entry(i);
 

@@ -23,6 +23,20 @@
 #include <sound/asoc.h>
 #include <sound/tlv.h>
 
+struct tplg_attribute_ref {
+	const char *string;
+	int value;
+	struct list_head list; /* item in attribute constraint value_list */
+};
+
+struct attribute_constraint {
+	struct list_head value_list; /* list of valid values */
+	const char *value_ref;
+	int mask;
+	int min;
+	int max;
+};
+
 enum tplg_class_param_type {
 	TPLG_CLASS_PARAM_TYPE_ARGUMENT,
 	TPLG_CLASS_PARAM_TYPE_ATTRIBUTE,
@@ -33,6 +47,8 @@ struct tplg_attribute {
 	snd_config_type_t type;
 	enum tplg_class_param_type param_type;
 	char token_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	char value_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	struct attribute_constraint constraint;
 	struct list_head list; /* item in attribute list */
 	union {
 		long integer;
