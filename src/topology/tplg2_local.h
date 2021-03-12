@@ -48,6 +48,8 @@ struct tplg_attribute {
 	enum tplg_class_param_type param_type;
 	char token_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
 	char value_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	bool found;
+	snd_config_t *cfg;
 	struct attribute_constraint constraint;
 	struct list_head list; /* item in attribute list */
 	union {

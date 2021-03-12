@@ -151,6 +151,190 @@ static int tplg_parse_class_constraints(snd_tplg_t *tplg, snd_config_t *cfg,
 	return 0;
 }
 
+/*
+ * Validate attributes that can have an array of values. Note that the array of values
+ * is not parsed here and should be handled by the compiler when the object containing
+ * this attribute is parsed.
+ */
+static int tplg_parse_attribute_compound_value(snd_config_t *cfg, struct tplg_attribute *attr)
+{
+	snd_config_iterator_t i, next;
+	struct list_head *pos;
+	snd_config_t *n;
+
+	/* every value in the array must be valid */
+	snd_config_for_each(i, next, cfg) {
+		const char *id, *s;
+		bool found = false;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0) {
+			SNDERR("invalid cfg id for attribute %s\n", attr->name);
+			return -EINVAL;
+		}
+
+		if (snd_config_get_string(n, &s) < 0) {
+			SNDERR("invalid string for attribute %s\n", attr->name);
+			return -EINVAL;
+		}
+
+		if (list_empty(&attr->constraint.value_list))
+			continue;
+
+		list_for_each(pos, &attr->constraint.value_list) {
+			struct tplg_attribute_ref *v;
+
+			v = list_entry(pos, struct tplg_attribute_ref, list);
+			if (!strcmp(s, v->string)) {
+				found = true;
+				break;
+			}
+		}
+
+		if (!found) {
+			SNDERR("Invalid value %s for attribute %s\n", s, attr->name);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+/*
+ * Parse attribute values and set the attribute's type field. Attributes/arguments with
+ * constraints are validated against them before saving the value.
+ */
+int tplg_parse_attribute_value(snd_config_t *cfg, struct list_head *list)
+{
+	snd_config_type_t type = snd_config_get_type(cfg);
+	struct tplg_attribute *attr = NULL;
+	struct list_head *pos;
+	bool found = false;
+	int err;
+	const char *id;
+
+	if (snd_config_get_id(cfg, &id) < 0) {
+		SNDERR("No name for attribute\n");
+		return -EINVAL;
+	}
+
+	/* ignore non-existent attributes */
+	list_for_each(pos, list) {
+		attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!strcmp(attr->name, id)) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+		return 0;
+
+	attr->cfg = cfg;
+
+	/* parse value */
+	switch (type) {
+	case SND_CONFIG_TYPE_INTEGER:
+	{
+		long v;
+
+		err = snd_config_get_integer(cfg, &v);
+		assert(err >= 0);
+
+		if (v < attr->constraint.min || v > attr->constraint.max) {
+			SNDERR("Value %d out of range for attribute %s\n", v, attr->name);
+			return -EINVAL;
+		}
+		attr->value.integer = v;
+		break;
+	}
+	case SND_CONFIG_TYPE_INTEGER64:
+	{
+		long long v;
+
+		err = snd_config_get_integer64(cfg, &v);
+		assert(err >= 0);
+		if (v < attr->constraint.min || v > attr->constraint.max) {
+			SNDERR("Value %ld out of range for attribute %s\n", v, attr->name);
+			return -EINVAL;
+		}
+
+		attr->value.integer64 = v;
+		break;
+	}
+	case SND_CONFIG_TYPE_STRING:
+	{
+		struct list_head *pos;
+		const char *s;
+
+		err = snd_config_get_string(cfg, &s);
+		assert(err >= 0);
+
+		/* attributes with no pre-defined valid values */
+		if (list_empty(&attr->constraint.value_list)) {
+
+			/* change bool string to integer value */
+			if (!strcmp(s, "true")) {
+				attr->value.integer = 1;
+				attr->type = SND_CONFIG_TYPE_INTEGER;
+				attr->found = true;
+				return 0;
+			} else if (!strcmp(s, "false")) {
+				attr->value.integer = 0;
+				attr->type = SND_CONFIG_TYPE_INTEGER;
+				attr->found = true;
+				return 0;
+			}
+
+			snd_strlcpy(attr->value.string, s, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+			break;
+		}
+
+		/* Check if value is in the accepted valid values list */
+		list_for_each(pos, &attr->constraint.value_list) {
+			struct tplg_attribute_ref *v;
+
+			v = list_entry(pos, struct tplg_attribute_ref, list);
+
+			if (!strcmp(s, v->string)) {
+				snd_strlcpy(attr->value.string, v->string,
+					    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+				attr->type = type;
+				attr->found = true;
+				return 0;
+			}
+		}
+
+		SNDERR("Invalid value %s for attribute %s\n", s, attr->name);
+		return -EINVAL;
+	}
+	case SND_CONFIG_TYPE_REAL:
+	{
+		double d;
+
+		err = snd_config_get_real(cfg, &d);
+		assert(err >= 0);
+		attr->value.d = d;
+		break;
+	}
+	case SND_CONFIG_TYPE_COMPOUND:
+		/* for attributes that have an array of values */
+		err = tplg_parse_attribute_compound_value(cfg, attr);
+		if (err < 0)
+			return err;
+		break;
+	default:
+		SNDERR("Unsupported type %d for attribute %s\n", type, attr->name);
+		return -EINVAL;
+	}
+
+	attr->type = type;
+	attr->found = true;
+
+	return 0;
+}
+
 static int tplg_parse_class_attribute(snd_tplg_t *tplg, snd_config_t *cfg,
 				      struct tplg_attribute *attr)
 {
@@ -326,8 +510,15 @@ static int tplg_define_class(snd_tplg_t *tplg, snd_config_t *cfg, int type)
 				SNDERR("failed to parse attributes for class %s\n", class->name);
 				return ret;
 			}
+			continue;
 		}
 
+		/* class definitions come with default attribute values, process them too */
+		ret = tplg_parse_attribute_value(n, &class->attribute_list);
+		if (ret < 0) {
+			SNDERR("failed to parse attribute value for class %s\n", class->name);
+			return -EINVAL;
+		}
 	}
 
 	return 0;
