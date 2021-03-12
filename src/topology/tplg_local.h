@@ -95,6 +95,7 @@ struct snd_tplg {
 	struct list_head pcm_caps_list;
 	struct list_head hw_cfg_list;
 	struct list_head class_list;
+	struct list_head object_list;
 
 	/* type-specific control lists */
 	struct list_head mixer_list;
@@ -187,6 +188,7 @@ struct tplg_elem {
 		struct tplg_vendor_tuples *tuples;
 		struct snd_soc_tplg_manifest *manifest;
 		struct tplg_class *class;
+		struct tplg_object *object;
 	};
 
 	/* an element may refer to other elements:

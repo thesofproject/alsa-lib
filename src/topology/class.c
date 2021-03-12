@@ -221,7 +221,7 @@ static int tplg_parse_attribute_compound_value(snd_config_t *cfg, struct tplg_at
 }
 
 /* helper function to get an attribute by name */
-static struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name)
+struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name)
 {
 	struct list_head *pos;
 
@@ -325,7 +325,7 @@ static int tplg_parse_class_attribute_categories(snd_config_t *cfg, struct tplg_
  * Parse attribute values and set the attribute's type field. Attributes/arguments with
  * constraints are validated against them before saving the value.
  */
-int tplg_parse_attribute_value(snd_config_t *cfg, struct list_head *list)
+int tplg_parse_attribute_value(snd_config_t *cfg, struct list_head *list, bool override)
 {
 	snd_config_type_t type = snd_config_get_type(cfg);
 	struct tplg_attribute *attr = NULL;
@@ -350,6 +350,10 @@ int tplg_parse_attribute_value(snd_config_t *cfg, struct list_head *list)
 	}
 
 	if (!found)
+		return 0;
+
+	/* do not override previously set value */
+	if (!override && attr->found)
 		return 0;
 
 	attr->cfg = cfg;
@@ -645,7 +649,7 @@ static int tplg_define_class(snd_tplg_t *tplg, snd_config_t *cfg, int type)
 		}
 
 		/* class definitions come with default attribute values, process them too */
-		ret = tplg_parse_attribute_value(n, &class->attribute_list);
+		ret = tplg_parse_attribute_value(n, &class->attribute_list, false);
 		if (ret < 0) {
 			SNDERR("failed to parse attribute value for class %s\n", class->name);
 			return -EINVAL;

@@ -470,6 +470,7 @@ snd_tplg_t *snd_tplg_create(int flags)
 	INIT_LIST_HEAD(&tplg->tuple_list);
 	INIT_LIST_HEAD(&tplg->hw_cfg_list);
 	INIT_LIST_HEAD(&tplg->class_list);
+	INIT_LIST_HEAD(&tplg->object_list);
 
 	return tplg;
 }
@@ -484,6 +485,7 @@ void snd_tplg_free(snd_tplg_t *tplg)
 	free(tplg->bin);
 	free(tplg->manifest_pdata);
 
+	tplg_elem_free_list(&tplg->object_list);
 	tplg_elem_free_list(&tplg->class_list);
 	tplg_elem_free_list(&tplg->tlv_list);
 	tplg_elem_free_list(&tplg->widget_list);

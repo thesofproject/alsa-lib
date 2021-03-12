@@ -235,6 +235,14 @@ struct tplg_table tplg_table[] = {
 		.type  = SND_TPLG_TYPE_CLASS,
 		.enew  = 1,
 		.parse = tplg_define_classes,
+	},
+	{
+		.name  = "New Object",
+		.id    = "Object",
+		.loff  = offsetof(snd_tplg_t, object_list),
+		.type  = SND_TPLG_TYPE_OBJECT,
+		.enew  = 1,
+		.parse = tplg_create_objects,
 	}
 };
 
@@ -314,6 +322,9 @@ void tplg_elem_free(struct tplg_elem *elem)
 
 	if (elem->type == SND_TPLG_TYPE_CLASS)
 		tplg2_free_elem_class(elem);
+
+	if (elem->type == SND_TPLG_TYPE_OBJECT)
+		tplg2_free_elem_object(elem);
 
 	tplg_ref_free_list(&elem->ref_list);
 

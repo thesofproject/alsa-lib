@@ -66,6 +66,17 @@ struct tplg_attribute {
 	}value;
 };
 
+struct tplg_object {
+	char name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	char class_name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	int num_args;
+	struct list_head attribute_list;
+	struct tplg_elem *elem;
+	snd_config_t *cfg;
+	int type;
+	struct list_head list; /* item in parent object list */
+};
+
 /* class types */
 #define SND_TPLG_CLASS_TYPE_BASE		0
 
@@ -78,3 +89,7 @@ struct tplg_class {
 
 int tplg_define_classes(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 void tplg2_free_elem_class(struct tplg_elem *elem);
+int tplg_create_objects(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
+int tplg_parse_attribute_value(snd_config_t *cfg, struct list_head *list, bool override);
+struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name);
+void tplg2_free_elem_object(struct tplg_elem *elem);
