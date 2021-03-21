@@ -458,3 +458,4 @@ int tplg_decode_pcm(snd_tplg_t *tplg, size_t pos,
 int tplg_decode_dai(snd_tplg_t *tplg, size_t pos,
 		    struct snd_soc_tplg_hdr *hdr,
 		    void *bin, size_t size);
+int lookup_channel(const char *c);
