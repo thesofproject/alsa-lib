@@ -394,6 +394,126 @@ static int parse_unsigned(snd_config_t *n, void *dst)
 	return 0;
 }
 
+int tplg_parse_stream_caps_param(snd_config_t *n, struct snd_soc_tplg_stream_caps *sc)
+{
+	const char *id, *val;
+	char *s;
+	int err;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "formats") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		s = strdup(val);
+		if (s == NULL)
+			return -ENOMEM;
+
+		err = split_format(sc, s);
+		free(s);
+
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "rates") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		s = strdup(val);
+		if (!s)
+			return -ENOMEM;
+
+		err = split_rate(sc, s);
+		free(s);
+
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "rate_min") == 0) {
+		if (parse_unsigned(n, &sc->rate_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rate_max") == 0) {
+		if (parse_unsigned(n, &sc->rate_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "channels_min") == 0) {
+		if (parse_unsigned(n, &sc->channels_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "channels_max") == 0) {
+		if (parse_unsigned(n, &sc->channels_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "periods_min") == 0) {
+		if (parse_unsigned(n, &sc->periods_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "periods_max") == 0) {
+		if (parse_unsigned(n, &sc->periods_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "period_size_min") == 0) {
+		if (parse_unsigned(n, &sc->period_size_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "period_size_max") == 0) {
+		if (parse_unsigned(n, &sc->period_size_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "buffer_size_min") == 0) {
+		if (parse_unsigned(n, &sc->buffer_size_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "buffer_size_max") == 0) {
+		if (parse_unsigned(n, &sc->buffer_size_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "sig_bits") == 0) {
+		if (parse_unsigned(n, &sc->sig_bits))
+			return -EINVAL;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse pcm stream capabilities */
 int tplg_parse_stream_caps(snd_tplg_t *tplg,
 			   snd_config_t *cfg,
@@ -403,8 +523,6 @@ int tplg_parse_stream_caps(snd_tplg_t *tplg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val;
-	char *s;
 	int err;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_STREAM_CAPS);
@@ -419,117 +537,10 @@ int tplg_parse_stream_caps(snd_tplg_t *tplg,
 
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
 
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "formats") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			s = strdup(val);
-			if (s == NULL)
-				return -ENOMEM;
-
-			err = split_format(sc, s);
-			free(s);
-
-			if (err < 0)
-				return err;
-
-			tplg_dbg("\t\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "rates") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			s = strdup(val);
-			if (!s)
-				return -ENOMEM;
-
-			err = split_rate(sc, s);
-			free(s);
-
-			if (err < 0)
-				return err;
-
-			tplg_dbg("\t\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "rate_min") == 0) {
-			if (parse_unsigned(n, &sc->rate_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rate_max") == 0) {
-			if (parse_unsigned(n, &sc->rate_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "channels_min") == 0) {
-			if (parse_unsigned(n, &sc->channels_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "channels_max") == 0) {
-			if (parse_unsigned(n, &sc->channels_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "periods_min") == 0) {
-			if (parse_unsigned(n, &sc->periods_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "periods_max") == 0) {
-			if (parse_unsigned(n, &sc->periods_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "period_size_min") == 0) {
-			if (parse_unsigned(n, &sc->period_size_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "period_size_max") == 0) {
-			if (parse_unsigned(n, &sc->period_size_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "buffer_size_min") == 0) {
-			if (parse_unsigned(n, &sc->buffer_size_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "buffer_size_max") == 0) {
-			if (parse_unsigned(n, &sc->buffer_size_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "sig_bits") == 0) {
-			if (parse_unsigned(n, &sc->sig_bits))
-				return -EINVAL;
-			continue;
-		}
-
+		err = tplg_parse_stream_caps_param(n, sc);
+		if (err < 0)
+			return err;
 	}
 
 	return 0;
@@ -835,6 +846,94 @@ static int save_flags(unsigned int flags, unsigned int mask,
 	return err;
 }
 
+int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *elem)
+{
+	struct snd_soc_tplg_pcm *pcm = elem->pcm;
+	const char *id;
+	int err, ival;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &pcm->pcm_id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "pcm") == 0) {
+		err = tplg_parse_compound(tplg, n,
+			tplg_parse_streams, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "compress") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		pcm->compress = ival;
+
+		tplg_dbg("\t%s: %d", id, ival);
+		return 0;
+	}
+
+	if (strcmp(id, "dai") == 0) {
+		err = tplg_parse_compound(tplg, n,
+			tplg_parse_fe_dai, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* flags */
+	if (strcmp(id, "symmetric_rates") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_channels") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_sample_bits") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* private data */
+	if (strcmp(id, "data") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse PCM (for front end DAI & DAI link) in text conf file */
 int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 		   void *private ATTRIBUTE_UNUSED)
@@ -843,8 +942,7 @@ int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id;
-	int err, ival;
+	int err;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_PCM);
 	if (!elem)
@@ -859,83 +957,9 @@ int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 	snd_config_for_each(i, next, cfg) {
 
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &pcm->pcm_id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "pcm") == 0) {
-			err = tplg_parse_compound(tplg, n,
-				tplg_parse_streams, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "compress") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			pcm->compress = ival;
-
-			tplg_dbg("\t%s: %d", id, ival);
-			continue;
-		}
-
-		if (strcmp(id, "dai") == 0) {
-			err = tplg_parse_compound(tplg, n,
-				tplg_parse_fe_dai, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* flags */
-		if (strcmp(id, "symmetric_rates") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_channels") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_sample_bits") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* private data */
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
+		err = tplg_parse_pcm_param(tplg, n, elem);
+		if (err < 0)
+			return err;
 	}
 
 	return 0;
@@ -1130,6 +1154,94 @@ static int parse_hw_config_refs(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return 0;
 }
 
+int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
+			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem)
+{
+	const char *id, *val = NULL;
+	int err;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &link->id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "stream_name") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		snd_strlcpy(link->stream_name, val,
+			       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "hw_configs") == 0) {
+		if (!elem)
+			return 0;
+
+		err = parse_hw_config_refs(tplg, n, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "default_hw_conf_id") == 0) {
+		if (parse_unsigned(n, &link->default_hw_config_id))
+			return -EINVAL;
+		return 0;
+	}
+
+	/* flags */
+	if (strcmp(id, "symmetric_rates") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_channels") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_sample_bits") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* private data */
+	if (strcmp(id, "data") == 0) {
+		if (!elem)
+			return 0;
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse a physical link element in text conf file */
 int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 		    void *private ATTRIBUTE_UNUSED)
@@ -1138,8 +1250,7 @@ int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
-	int err;
+	int ret;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_BE);
 	if (!elem)
@@ -1152,81 +1263,10 @@ int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 	tplg_dbg(" Link: %s", elem->id);
 
 	snd_config_for_each(i, next, cfg) {
-
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &link->id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "stream_name") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			snd_strlcpy(link->stream_name, val,
-				       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "hw_configs") == 0) {
-			err = parse_hw_config_refs(tplg, n, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "default_hw_conf_id") == 0) {
-			if (parse_unsigned(n, &link->default_hw_config_id))
-				return -EINVAL;
-			continue;
-		}
-
-		/* flags */
-		if (strcmp(id, "symmetric_rates") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_channels") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_sample_bits") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* private data */
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
+		ret = tplg_parse_link_param(tplg, n, link, elem);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;

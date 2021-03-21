@@ -460,3 +460,7 @@ int tplg_decode_dai(snd_tplg_t *tplg, size_t pos,
 		    void *bin, size_t size);
 int lookup_channel(const char *c);
 int tplg_set_hw_config_param(snd_config_t *n, struct snd_soc_tplg_hw_config *hw_cfg);
+int tplg_parse_stream_caps_param(snd_config_t *n, struct snd_soc_tplg_stream_caps *sc);
+int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *elem);
+int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
+			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem);
