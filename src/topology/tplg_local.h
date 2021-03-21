@@ -465,3 +465,11 @@ int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *el
 int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
 			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem);
 int lookup_widget(const char *w);
+int tplg_parse_control_mixer_param(snd_tplg_t *tplg, snd_config_t *n,
+				   struct snd_soc_tplg_mixer_control *mc,
+				   struct tplg_elem *elem);
+int tplg_parse_control_bytes_param(snd_tplg_t *tplg, snd_config_t *n,
+				    struct snd_soc_tplg_bytes_control *be,
+				    struct tplg_elem *elem);
+int parse_access_values(snd_config_t *cfg, struct snd_soc_tplg_ctl_hdr *hdr);
+int tplg_parse_tlv_dbscale_param(snd_config_t *n, struct snd_soc_tplg_tlv_dbscale *scale);

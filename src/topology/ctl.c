@@ -45,15 +45,20 @@ static const struct ctl_access_elem ctl_access[] = {
 };
 
 /* find CTL access strings and conver to values */
-static int parse_access_values(snd_config_t *cfg,
-			       struct snd_soc_tplg_ctl_hdr *hdr)
+int parse_access_values(snd_config_t *cfg, struct snd_soc_tplg_ctl_hdr *hdr)
 {
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *value = NULL;
+	const char *id, *value = NULL;
 	unsigned int j;
 
 	tplg_dbg(" Access:");
+
+	if (snd_config_get_id(cfg, &id) < 0)
+		return 0;
+
+	if (strcmp(id, "access"))
+		return 0;
 
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
@@ -67,6 +72,7 @@ static int parse_access_values(snd_config_t *cfg,
 			if (strcmp(value, ctl_access[j].name) == 0) {
 				hdr->access |= ctl_access[j].value;
 				tplg_dbg("\t%s", value);
+
 				break;
 			}
 		}
@@ -314,6 +320,36 @@ int tplg_build_controls(snd_tplg_t *tplg)
 	return 0;
 }
 
+int tplg_parse_tlv_dbscale_param(snd_config_t *n, struct snd_soc_tplg_tlv_dbscale *scale)
+{
+	const char *id = NULL;
+	int val;
+
+	/* get ID */
+	if (snd_config_get_id(n, &id) < 0)
+		return -EINVAL;
+
+	/* get value */
+	if (tplg_get_integer(n, &val, 0))
+		return 0;
+
+	tplg_dbg("\t%s = %i", id, val);
+
+	/* get TLV data */
+	if (strcmp(id, "min") == 0)
+		scale->min = val;
+	else if (strcmp(id, "step") == 0)
+		scale->step = val;
+	else if (strcmp(id, "mute") == 0)
+		scale->mute = val;
+	else if (strcmp(id, "name")) {
+		SNDERR("unknown id '%s'", id);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 
 /*
  * Parse TLV of DBScale type.
@@ -326,10 +362,9 @@ static int tplg_parse_tlv_dbscale(snd_config_t *cfg, struct tplg_elem *elem)
 	snd_config_t *n;
 	struct snd_soc_tplg_ctl_tlv *tplg_tlv = elem->tlv;
 	struct snd_soc_tplg_tlv_dbscale *scale;
-	const char *id = NULL;
-	int val;
+	int ret;
 
-	tplg_dbg(" scale: %s", elem->id);
+	tplg_dbg("scale: %s", elem->id);
 
 	tplg_tlv->size = sizeof(struct snd_soc_tplg_ctl_tlv);
 	tplg_tlv->type = SNDRV_CTL_TLVT_DB_SCALE;
@@ -339,25 +374,9 @@ static int tplg_parse_tlv_dbscale(snd_config_t *cfg, struct tplg_elem *elem)
 
 		n = snd_config_iterator_entry(i);
 
-		/* get ID */
-		if (snd_config_get_id(n, &id) < 0)
-			return -EINVAL;
-
-		/* get value */
-		if (tplg_get_integer(n, &val, 0))
-			continue;
-
-		tplg_dbg("\t%s = %i", id, val);
-
-		/* get TLV data */
-		if (strcmp(id, "min") == 0)
-			scale->min = val;
-		else if (strcmp(id, "step") == 0)
-			scale->step = val;
-		else if (strcmp(id, "mute") == 0)
-			scale->mute = val;
-		else
-			SNDERR("unknown id '%s'", id);
+		ret = tplg_parse_tlv_dbscale_param(n, scale);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;
@@ -427,6 +446,94 @@ int tplg_save_tlv(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return err;
 }
 
+int tplg_parse_control_bytes_param(snd_tplg_t *tplg, snd_config_t *n,
+				    struct snd_soc_tplg_bytes_control *be,
+				    struct tplg_elem *elem)
+{
+
+	const char *id, *val = NULL;
+	int err, ival;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "base") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		be->base = ival;
+		tplg_dbg("\t%s: %d", id, be->base);
+		return 0;
+	}
+
+	if (strcmp(id, "num_regs") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		be->num_regs = ival;
+		tplg_dbg("\t%s: %d", id, be->num_regs);
+		return 0;
+	}
+
+	if (strcmp(id, "max") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		be->max = ival;
+		tplg_dbg("\t%s: %d", id, be->max);
+		return 0;
+	}
+
+	if (strcmp(id, "mask") == 0) {
+		if (tplg_get_integer(n, &ival, 16))
+			return -EINVAL;
+
+		be->mask = ival;
+		tplg_dbg("\t%s: %d", id, be->mask);
+		return 0;
+	}
+
+	if (strcmp(id, "data") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "tlv") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		err = tplg_ref_add(elem, SND_TPLG_TYPE_TLV, val);
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "ops") == 0) {
+		err = tplg_parse_compound(tplg, n, tplg_parse_ops, &be->hdr);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "extops") == 0) {
+		err = tplg_parse_compound(tplg, n, tplg_parse_ext_ops, be);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
 /* Parse Control Bytes */
 int tplg_parse_control_bytes(snd_tplg_t *tplg,
 			     snd_config_t *cfg,
@@ -436,8 +543,8 @@ int tplg_parse_control_bytes(snd_tplg_t *tplg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
-	int err, ival;
+	const char *id;
+	int err;
 	bool access_set = false, tlv_set = false;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_BYTES);
@@ -453,94 +560,29 @@ int tplg_parse_control_bytes(snd_tplg_t *tplg,
 
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
+		err = tplg_parse_control_bytes_param(tplg, n, be, elem);
+		if (err < 0)
+			return err;
+	}
+
+	/* check if access/tlv are set. No need to check for error or parse these again */
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
 		if (snd_config_get_id(n, &id) < 0)
 			continue;
 
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "base") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			be->base = ival;
-			tplg_dbg("\t%s: %d", id, be->base);
-			continue;
-		}
-
-		if (strcmp(id, "num_regs") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			be->num_regs = ival;
-			tplg_dbg("\t%s: %d", id, be->num_regs);
-			continue;
-		}
-
-		if (strcmp(id, "max") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			be->max = ival;
-			tplg_dbg("\t%s: %d", id, be->max);
-			continue;
-		}
-
-		if (strcmp(id, "mask") == 0) {
-			if (tplg_get_integer(n, &ival, 16))
-				return -EINVAL;
-
-			be->mask = ival;
-			tplg_dbg("\t%s: %d", id, be->mask);
-			continue;
-		}
-
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "tlv") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			err = tplg_ref_add(elem, SND_TPLG_TYPE_TLV, val);
-			if (err < 0)
-				return err;
-
-			tlv_set = true;
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "ops") == 0) {
-			err = tplg_parse_compound(tplg, n, tplg_parse_ops,
-				&be->hdr);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "extops") == 0) {
-			err = tplg_parse_compound(tplg, n, tplg_parse_ext_ops,
-				be);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
 		if (strcmp(id, "access") == 0) {
+			if (!cfg)
+				return 0;
 			err = parse_access(cfg, &be->hdr);
 			if (err < 0)
 				return err;
 			access_set = true;
 			continue;
 		}
+
+		if (!strcmp(id, "tlv"))
+			tlv_set = true;
 	}
 
 	/* set CTL access to default values if none are provided */
@@ -730,6 +772,86 @@ int tplg_save_control_enum(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return err;
 }
 
+int tplg_parse_control_mixer_param(snd_tplg_t *tplg, snd_config_t *n,
+				   struct snd_soc_tplg_mixer_control *mc,
+				   struct tplg_elem *elem)
+{
+	const char *id, *val = NULL;
+	int err, ival;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "channel") == 0) {
+		if (mc->num_channels >= SND_SOC_TPLG_MAX_CHAN) {
+			SNDERR("too many channels %s", elem->id);
+			return -EINVAL;
+		}
+
+		err = tplg_parse_compound(tplg, n, tplg_parse_channel,
+			mc->channel);
+		if (err < 0)
+			return err;
+
+		mc->num_channels = tplg->channel_idx;
+		return 0;
+	}
+
+	if (strcmp(id, "max") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		mc->max = ival;
+		tplg_dbg("\t%s: %d", id, mc->max);
+		return 0;
+	}
+
+	if (strcmp(id, "invert") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+		mc->invert = ival;
+
+		tplg_dbg("\t%s: %d", id, mc->invert);
+		return 0;
+	}
+
+	if (strcmp(id, "ops") == 0) {
+		err = tplg_parse_compound(tplg, n, tplg_parse_ops,
+			&mc->hdr);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "tlv") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		err = tplg_ref_add(elem, SND_TPLG_TYPE_TLV, val);
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "data") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse Controls.
  *
  * Mixer control. Supports multiple channels.
@@ -742,8 +864,8 @@ int tplg_parse_control_mixer(snd_tplg_t *tplg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
-	int err, j, ival;
+	const char *id;
+	int err, j;
 	bool access_set = false, tlv_set = false;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_MIXER);
@@ -763,87 +885,32 @@ int tplg_parse_control_mixer(snd_tplg_t *tplg,
 
 	tplg_dbg(" Control Mixer: %s", elem->id);
 
-	/* giterate trough each mixer elment */
+	/* iterate through each mixer element */
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
+		err = tplg_parse_control_mixer_param(tplg, n, mc, elem);
+		if (err < 0)
+			return err;
+	}
+
+	/* check if access/tlv are set. No need to check for error or parse these again */
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
 		if (snd_config_get_id(n, &id) < 0)
 			continue;
 
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "channel") == 0) {
-			if (mc->num_channels >= SND_SOC_TPLG_MAX_CHAN) {
-				SNDERR("too many channels %s", elem->id);
-				return -EINVAL;
-			}
-
-			err = tplg_parse_compound(tplg, n, tplg_parse_channel,
-				mc->channel);
-			if (err < 0)
-				return err;
-
-			mc->num_channels = tplg->channel_idx;
-			continue;
-		}
-
-		if (strcmp(id, "max") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			mc->max = ival;
-			tplg_dbg("\t%s: %d", id, mc->max);
-			continue;
-		}
-
-		if (strcmp(id, "invert") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-			mc->invert = ival;
-
-			tplg_dbg("\t%s: %d", id, mc->invert);
-			continue;
-		}
-
-		if (strcmp(id, "ops") == 0) {
-			err = tplg_parse_compound(tplg, n, tplg_parse_ops,
-				&mc->hdr);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "tlv") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			err = tplg_ref_add(elem, SND_TPLG_TYPE_TLV, val);
-			if (err < 0)
-				return err;
-
-			tlv_set = true;
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
 		if (strcmp(id, "access") == 0) {
+			if (!cfg)
+				return 0;
 			err = parse_access(cfg, &mc->hdr);
 			if (err < 0)
 				return err;
 			access_set = true;
 			continue;
 		}
+
+		if (!strcmp(id, "tlv"))
+			tlv_set = true;
 	}
 
 	/* set CTL access to default values if none are provided */
