@@ -1401,17 +1401,245 @@ static const char *get_audio_hw_format_name(unsigned int type)
 	return NULL;
 }
 
-int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
-			 void *private ATTRIBUTE_UNUSED)
+int tplg_set_hw_config_param(snd_config_t *n, struct snd_soc_tplg_hw_config *hw_cfg)
 {
-
-	struct snd_soc_tplg_hw_config *hw_cfg;
-	struct tplg_elem *elem;
-	snd_config_iterator_t i, next;
-	snd_config_t *n;
 	const char *id, *val = NULL;
 	int ret, ival;
 	bool provider_legacy;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &hw_cfg->id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "format") == 0 ||
+	    strcmp(id, "fmt") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		ret = get_audio_hw_format(val);
+		if (ret < 0)
+			return ret;
+		hw_cfg->fmt = ret;
+		return 0;
+	}
+
+	provider_legacy = false;
+	if (strcmp(id, "bclk_master") == 0) {
+		SNDERR("deprecated option %s, please use 'bclk'\n", id);
+		provider_legacy = true;
+	}
+
+	if (provider_legacy ||
+	    strcmp(id, "bclk") == 0) {
+
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "codec is slave"
+			 */
+			SNDERR("deprecated bclk value '%s'", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_slave")) {
+			SNDERR("deprecated bclk value '%s', use 'codec_consumer'", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_consumer")) {
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_master")) {
+			SNDERR("deprecated bclk value '%s', use 'codec_provider", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
+		} else if (!strcmp(val, "codec_provider")) {
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "bclk_freq") == 0 ||
+	    strcmp(id, "bclk_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->bclk_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "bclk_invert") == 0 ||
+	    strcmp(id, "invert_bclk") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		hw_cfg->invert_bclk = ival;
+		return 0;
+	}
+
+	provider_legacy = false;
+	if (strcmp(id, "fsync_master") == 0) {
+		SNDERR("deprecated option %s, please use 'fsync'\n", id);
+		provider_legacy = true;
+	}
+
+	if (provider_legacy ||
+	    strcmp(id, "fsync") == 0) {
+
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "codec is slave"
+			 */
+			SNDERR("deprecated fsync value '%s'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_slave")) {
+			SNDERR("deprecated fsync value '%s', use 'codec_consumer'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_consumer")) {
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_master")) {
+			SNDERR("deprecated fsync value '%s', use 'codec_provider'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
+		} else if (!strcmp(val, "codec_provider")) {
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "fsync_invert") == 0 ||
+	    strcmp(id, "invert_fsync") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		hw_cfg->invert_fsync = ival;
+		return 0;
+	}
+
+	if (strcmp(id, "fsync_freq") == 0 ||
+	    strcmp(id, "fsync_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->fsync_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "mclk_freq") == 0 ||
+	    strcmp(id, "mclk_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->mclk_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "mclk") == 0 ||
+	    strcmp(id, "mclk_direction") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "for codec, mclk is input"
+			 */
+			SNDERR("deprecated mclk value '%s'", val);
+
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
+		} else if (!strcmp(val, "codec_mclk_in")) {
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
+		} else if (!strcmp(val, "codec_mclk_out")) {
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CO;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "pm_gate_clocks") == 0 ||
+	    strcmp(id, "clock_gated") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		if (ival)
+			hw_cfg->clock_gated =
+				SND_SOC_TPLG_DAI_CLK_GATE_GATED;
+		else
+			hw_cfg->clock_gated =
+				SND_SOC_TPLG_DAI_CLK_GATE_CONT;
+		return 0;
+	}
+
+	if (strcmp(id, "tdm_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tdm_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tdm_slot_width") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tdm_slot_width))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tx_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tx_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rx_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->rx_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tx_channels") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tx_channels))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rx_channels") == 0) {
+		if (parse_unsigned(n, &hw_cfg->rx_channels))
+			return -EINVAL;
+		return 0;
+	}
+
+	return 0;
+}
+
+static int tplg_set_hw_config(snd_config_t *cfg, struct snd_soc_tplg_hw_config *hw_cfg)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
+		ret = tplg_set_hw_config_param(n, hw_cfg);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+
+int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
+			 void *private ATTRIBUTE_UNUSED)
+{
+	struct snd_soc_tplg_hw_config *hw_cfg;
+	struct tplg_elem *elem;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_HW_CONFIG);
 	if (!elem)
@@ -1422,221 +1650,7 @@ int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
 
 	tplg_dbg(" Link HW config: %s", elem->id);
 
-	snd_config_for_each(i, next, cfg) {
-
-		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &hw_cfg->id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "format") == 0 ||
-		    strcmp(id, "fmt") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			ret = get_audio_hw_format(val);
-			if (ret < 0)
-				return ret;
-			hw_cfg->fmt = ret;
-			continue;
-		}
-
-		provider_legacy = false;
-		if (strcmp(id, "bclk_master") == 0) {
-			SNDERR("deprecated option %s, please use 'bclk'\n", id);
-			provider_legacy = true;
-		}
-
-		if (provider_legacy ||
-		    strcmp(id, "bclk") == 0) {
-
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "codec is slave"
-				 */
-				SNDERR("deprecated bclk value '%s'", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_slave")) {
-				SNDERR("deprecated bclk value '%s', use 'codec_consumer'", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_consumer")) {
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_master")) {
-				SNDERR("deprecated bclk value '%s', use 'codec_provider", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
-			} else if (!strcmp(val, "codec_provider")) {
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "bclk_freq") == 0 ||
-		    strcmp(id, "bclk_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->bclk_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "bclk_invert") == 0 ||
-		    strcmp(id, "invert_bclk") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			hw_cfg->invert_bclk = ival;
-			continue;
-		}
-
-		provider_legacy = false;
-		if (strcmp(id, "fsync_master") == 0) {
-			SNDERR("deprecated option %s, please use 'fsync'\n", id);
-			provider_legacy = true;
-		}
-
-		if (provider_legacy ||
-		    strcmp(id, "fsync") == 0) {
-
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "codec is slave"
-				 */
-				SNDERR("deprecated fsync value '%s'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_slave")) {
-				SNDERR("deprecated fsync value '%s', use 'codec_consumer'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_consumer")) {
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_master")) {
-				SNDERR("deprecated fsync value '%s', use 'codec_provider'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
-			} else if (!strcmp(val, "codec_provider")) {
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "fsync_invert") == 0 ||
-		    strcmp(id, "invert_fsync") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			hw_cfg->invert_fsync = ival;
-			continue;
-		}
-
-		if (strcmp(id, "fsync_freq") == 0 ||
-		    strcmp(id, "fsync_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->fsync_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "mclk_freq") == 0 ||
-		    strcmp(id, "mclk_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->mclk_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "mclk") == 0 ||
-		    strcmp(id, "mclk_direction") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "for codec, mclk is input"
-				 */
-				SNDERR("deprecated mclk value '%s'", val);
-
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
-			} else if (!strcmp(val, "codec_mclk_in")) {
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
-			} else if (!strcmp(val, "codec_mclk_out")) {
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CO;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "pm_gate_clocks") == 0 ||
-		    strcmp(id, "clock_gated") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			if (ival)
-				hw_cfg->clock_gated =
-					SND_SOC_TPLG_DAI_CLK_GATE_GATED;
-			else
-				hw_cfg->clock_gated =
-					SND_SOC_TPLG_DAI_CLK_GATE_CONT;
-			continue;
-		}
-
-		if (strcmp(id, "tdm_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tdm_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tdm_slot_width") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tdm_slot_width))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tx_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tx_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rx_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->rx_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tx_channels") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tx_channels))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rx_channels") == 0) {
-			if (parse_unsigned(n, &hw_cfg->rx_channels))
-				return -EINVAL;
-			continue;
-		}
-
-	}
-
-	return 0;
+	return tplg_set_hw_config(cfg, hw_cfg);
 }
 
 /* save hw config */
