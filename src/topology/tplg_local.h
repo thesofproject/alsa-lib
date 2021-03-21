@@ -464,3 +464,4 @@ int tplg_parse_stream_caps_param(snd_config_t *n, struct snd_soc_tplg_stream_cap
 int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *elem);
 int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
 			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem);
+int lookup_widget(const char *w);

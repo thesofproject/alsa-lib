@@ -48,7 +48,7 @@ static const struct map_elem widget_map[] = {
 	{"decoder", SND_SOC_TPLG_DAPM_DECODER},
 };
 
-static int lookup_widget(const char *w)
+int lookup_widget(const char *w)
 {
 	unsigned int i;
 
