@@ -480,3 +480,5 @@ int get_tuple_type(const char *name);
 int get_token_value(const char *token_id, struct tplg_vendor_tokens *tokens);
 struct tplg_elem *tplg_elem_new_route(snd_tplg_t *tplg, int index);
 int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem, int width);
+int tplg_parse_dapm_widget_param(snd_config_t *n, struct snd_soc_tplg_dapm_widget *widget,
+				 struct tplg_elem *elem);

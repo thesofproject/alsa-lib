@@ -507,6 +507,147 @@ int tplg_save_dapm_graph(snd_tplg_t *tplg, int index,
 	return err;
 }
 
+int tplg_parse_dapm_widget_param(snd_config_t *n, struct snd_soc_tplg_dapm_widget *widget,
+				 struct tplg_elem *elem)
+{
+	const char *id, *val = NULL;
+	int widget_type, err, ival;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "type") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		widget_type = lookup_widget(val);
+		if (widget_type < 0){
+			SNDERR("widget '%s': Unsupported widget type %s",
+				elem->id, val);
+			return -EINVAL;
+		}
+
+		widget->id = widget_type;
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "stream_name") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		snd_strlcpy(widget->sname, val,
+			       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "no_pm") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		widget->reg = ival ? -1 : 0;
+
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "shift") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		widget->shift = ival;
+		tplg_dbg("\t%s: %d", id, widget->shift);
+		return 0;
+	}
+
+	if (strcmp(id, "reg") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		widget->reg = ival;
+		tplg_dbg("\t%s: %d", id, widget->reg);
+		return 0;
+	}
+
+	if (strcmp(id, "invert") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		widget->invert = ival;
+		tplg_dbg("\t%s: %d", id, widget->invert);
+		return 0;
+	}
+
+	if (strcmp(id, "subseq") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		widget->subseq = ival;
+		tplg_dbg("\t%s: %d", id, widget->subseq);
+		return 0;
+	}
+
+	if (strcmp(id, "event_type") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		widget->event_type = ival;
+		tplg_dbg("\t%s: %d", id, widget->event_type);
+		return 0;
+	}
+
+	if (strcmp(id, "event_flags") == 0) {
+		if (tplg_get_integer(n, &ival, 0))
+			return -EINVAL;
+
+		widget->event_flags = ival;
+		tplg_dbg("\t%s: %d", id, widget->event_flags);
+		return 0;
+	}
+
+	if (strcmp(id, "enum") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_ENUM);
+		if (err < 0)
+			return err;
+
+		return 0;
+	}
+
+	if (strcmp(id, "mixer") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_MIXER);
+		if (err < 0)
+			return err;
+
+		return 0;
+	}
+
+	if (strcmp(id, "bytes") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_BYTES);
+		if (err < 0)
+			return err;
+
+		return 0;
+	}
+
+	if (strcmp(id, "data") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* DAPM Widget */
 int tplg_parse_dapm_widget(snd_tplg_t *tplg,
 			   snd_config_t *cfg, void *private ATTRIBUTE_UNUSED)
@@ -515,8 +656,7 @@ int tplg_parse_dapm_widget(snd_tplg_t *tplg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
-	int widget_type, err, ival;
+	int ret;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_DAPM_WIDGET);
 	if (!elem)
@@ -531,137 +671,9 @@ int tplg_parse_dapm_widget(snd_tplg_t *tplg,
 	snd_config_for_each(i, next, cfg) {
 
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "type") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			widget_type = lookup_widget(val);
-			if (widget_type < 0){
-				SNDERR("widget '%s': Unsupported widget type %s",
-					elem->id, val);
-				return -EINVAL;
-			}
-
-			widget->id = widget_type;
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "stream_name") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			snd_strlcpy(widget->sname, val,
-				       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "no_pm") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			widget->reg = ival ? -1 : 0;
-
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "shift") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			widget->shift = ival;
-			tplg_dbg("\t%s: %d", id, widget->shift);
-			continue;
-		}
-
-		if (strcmp(id, "reg") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			widget->reg = ival;
-			tplg_dbg("\t%s: %d", id, widget->reg);
-			continue;
-		}
-
-		if (strcmp(id, "invert") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			widget->invert = ival;
-			tplg_dbg("\t%s: %d", id, widget->invert);
-			continue;
-		}
-
-		if (strcmp(id, "subseq") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			widget->subseq = ival;
-			tplg_dbg("\t%s: %d", id, widget->subseq);
-			continue;
-		}
-
-		if (strcmp(id, "event_type") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			widget->event_type = ival;
-			tplg_dbg("\t%s: %d", id, widget->event_type);
-			continue;
-		}
-
-		if (strcmp(id, "event_flags") == 0) {
-			if (tplg_get_integer(n, &ival, 0))
-				return -EINVAL;
-
-			widget->event_flags = ival;
-			tplg_dbg("\t%s: %d", id, widget->event_flags);
-			continue;
-		}
-
-		if (strcmp(id, "enum") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_ENUM);
-			if (err < 0)
-				return err;
-
-			continue;
-		}
-
-		if (strcmp(id, "mixer") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_MIXER);
-			if (err < 0)
-				return err;
-
-			continue;
-		}
-
-		if (strcmp(id, "bytes") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_BYTES);
-			if (err < 0)
-				return err;
-
-			continue;
-		}
-
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
+		ret = tplg_parse_dapm_widget_param(n, widget, elem);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;
