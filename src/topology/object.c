@@ -15,7 +15,6 @@
   Author: Ranjani Sridharan <ranjani.sridharan@linux.intel.com>
 */
 #include "list.h"
-#include "local.h"
 #include "tplg_local.h"
 #include "tplg2_local.h"
 #include <ctype.h>
@@ -783,6 +782,13 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 
 	/* sanity check */
 	switch(object->type) {
+	case SND_TPLG_CLASS_TYPE_DAI:
+		ret = tplg_create_dai_object(class, object);
+		if (ret < 0) {
+			SNDERR("Failed to create DAI object for %s\n", object->name);
+			return NULL;
+		}
+		break;
 	case SND_TPLG_CLASS_TYPE_COMPONENT:
 		ret = tplg_create_component_object(object);
 		if (ret < 0) {
@@ -1196,6 +1202,13 @@ static int tplg_build_object(snd_tplg_t *tplg, struct tplg_object *object)
 		}
 		break;
 	}
+	case SND_TPLG_CLASS_TYPE_DAI:
+		ret = tplg_build_dai_object(tplg, object);
+		if (ret < 0) {
+			SNDERR("Failed to build DAI object %s\n", object->name);
+			return ret;
+		}
+		break;
 	case SND_TPLG_CLASS_TYPE_PCM:
 		ret = tplg_build_pcm_type_object(tplg, object);
 		if (ret < 0) {
