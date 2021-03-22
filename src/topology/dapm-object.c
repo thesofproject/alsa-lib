@@ -43,6 +43,320 @@ int tplg_create_component_object(struct tplg_object *object)
 	return 0;
 }
 
+static int tplg2_parse_channel(struct tplg_object *object, struct tplg_elem *mixer_elem)
+{
+	struct snd_soc_tplg_mixer_control *mc = mixer_elem->mixer_ctrl;
+	struct snd_soc_tplg_channel *channel = mc->channel;
+	struct list_head *pos;
+	char *channel_name = strchr(object->name, '.') + 1;
+	int channel_id = lookup_channel(channel_name);
+
+	if (channel_id < 0) {
+		SNDERR("invalid channel %d for mixer %s", channel_id, mixer_elem->id);
+		return -EINVAL;
+	}
+
+	channel += mc->num_channels;
+
+	channel->id = channel_id;
+	channel->size = sizeof(*channel);
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!strcmp(attr->name, "reg"))
+			channel->reg = attr->value.integer;
+
+
+		if (!strcmp(attr->name, "shift"))
+			channel->shift = attr->value.integer;
+	}
+
+	mc->num_channels++;
+	if (mc->num_channels >= SND_SOC_TPLG_MAX_CHAN) {
+		SNDERR("Max channels exceeded for %s\n", mixer_elem->id);
+		return -EINVAL;
+	}
+
+	tplg_dbg("channel: %s id: %d reg:%d shift %d", channel_name, channel->id, channel->reg, channel->shift);
+
+	return 0;
+}
+
+static int tplg2_parse_tlv(snd_tplg_t *tplg, struct tplg_object *object,
+			    struct tplg_elem *mixer_elem)
+{
+	struct snd_soc_tplg_ctl_tlv *tplg_tlv;
+	struct snd_soc_tplg_tlv_dbscale *scale;
+	struct tplg_elem *elem;
+	struct list_head *pos;
+	int ret;
+
+	/* Just add ref if TLV elem exists already */
+	elem = tplg_elem_lookup(&tplg->widget_list, object->name, SND_TPLG_TYPE_TLV,
+				SND_TPLG_INDEX_ALL);
+	if (elem) {
+		tplg_tlv = elem->tlv;
+		scale = &tplg_tlv->scale;
+		goto ref;
+	}
+
+	/* otherwise create new TLV elem */
+	elem = tplg_elem_new_common(tplg, NULL, object->name, SND_TPLG_TYPE_TLV);
+	if (!elem)
+		return -ENOMEM;
+
+	tplg_tlv = elem->tlv;
+	tplg_tlv->size = sizeof(struct snd_soc_tplg_ctl_tlv);
+	tplg_tlv->type = SNDRV_CTL_TLVT_DB_SCALE;
+	scale = &tplg_tlv->scale;
+
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		if (!strcmp(child->class_name, "scale")) {
+			list_for_each(pos, &child->attribute_list) {
+				struct tplg_attribute *attr;
+
+				attr = list_entry(pos, struct tplg_attribute, list);
+				if (!attr->cfg)
+					continue;
+
+				ret = tplg_parse_tlv_dbscale_param(attr->cfg, scale);
+				if (ret < 0) {
+					SNDERR("failed to DBScale for tlv %s", object->name);
+					return ret;
+				}
+			}
+
+			break;
+		}
+	}
+ref:
+	tplg_dbg("TLV: %s scale min: %d step %d mute %d", elem->id, scale->min, scale->step, scale->mute);
+
+	ret = tplg_ref_add(mixer_elem, SND_TPLG_TYPE_TLV, elem->id);
+	if (ret < 0) {
+		SNDERR("failed to add tlv elem %s to mixer elem %s\n",
+		       elem->id, mixer_elem->id);
+		return ret;
+	}
+
+	return 0;
+}
+
+static struct tplg_elem *tplg_build_comp_mixer(snd_tplg_t *tplg, struct tplg_object *object,
+						 char *name)
+{
+	struct snd_soc_tplg_mixer_control *mc;
+	struct snd_soc_tplg_ctl_hdr *hdr;
+	struct tplg_elem *elem;
+	struct list_head *pos;
+	bool access_set = false, tlv_set = false;
+	int j, ret;
+
+	elem = tplg_elem_new_common(tplg, NULL, name, SND_TPLG_TYPE_MIXER);
+	if (!elem)
+		return NULL;
+
+	/* init new mixer */
+	mc = elem->mixer_ctrl;
+	snd_strlcpy(mc->hdr.name, elem->id, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	mc->hdr.type = SND_SOC_TPLG_TYPE_MIXER;
+	mc->size = elem->size;
+	hdr = &mc->hdr;
+
+	/* set channel reg to default state */
+	for (j = 0; j < SND_SOC_TPLG_MAX_CHAN; j++)
+		mc->channel[j].reg = -1;
+
+	/* parse some control params from attributes */
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr;
+
+		attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!attr->cfg)
+			continue;
+
+		ret = tplg_parse_control_mixer_param(tplg, attr->cfg, mc, elem);
+		if (ret < 0) {
+			SNDERR("Error parsing hw_config for %s\n", object->name);
+			return NULL;
+		}
+
+		if (!strcmp(attr->name, "access")) {
+			ret = parse_access_values(attr->cfg, &mc->hdr);
+			if (ret < 0) {
+				SNDERR("Error parsing access attribute for %s\n", object->name);
+				return NULL;
+			}
+			access_set = true;
+		}
+
+	}
+
+	/* parse the rest from child objects */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		if (!object->cfg)
+			continue;
+
+		if (!strcmp(child->class_name, "ops")) {
+			ret = tplg_parse_ops(tplg, child->cfg, hdr);
+			if (ret < 0) {
+				SNDERR("Error parsing ops for mixer %s\n", object->name);
+				return NULL;
+			}
+			continue;
+		}
+
+		if (!strcmp(child->class_name, "tlv")) {
+			ret = tplg2_parse_tlv(tplg, child, elem);
+			if (ret < 0) {
+				SNDERR("Error parsing tlv for mixer %s\n", object->name);
+				return NULL;
+			}
+			tlv_set = true;
+			continue;
+		}
+
+		if (!strcmp(child->class_name, "channel")) {
+			ret = tplg2_parse_channel(child, elem);
+			if (ret < 0) {
+				SNDERR("Error parsing channel %d for mixer %s\n", child->name,
+				       object->name);
+				return NULL;
+			}
+			continue;
+		}
+	}
+	tplg_dbg("Mixer: %s, num_channels: %d", elem->id, mc->num_channels);
+	tplg_dbg("Ops info: %d get: %d put: %d max: %d", hdr->ops.info, hdr->ops.get, hdr->ops.put, mc->max);
+
+	/* set CTL access to default values if none provided */
+	if (!access_set) {
+		mc->hdr.access = SNDRV_CTL_ELEM_ACCESS_READWRITE;
+		if (tlv_set)
+			mc->hdr.access |= SNDRV_CTL_ELEM_ACCESS_TLV_READ;
+	}
+
+	return elem;
+}
+
+static struct tplg_elem *tplg_build_comp_bytes(snd_tplg_t *tplg, struct tplg_object *object,
+						 char *name)
+{
+	struct snd_soc_tplg_bytes_control *be;
+	struct snd_soc_tplg_ctl_hdr *hdr;
+	struct tplg_elem *elem;
+	struct list_head *pos;
+	bool access_set = false, tlv_set = false;
+	int ret;
+
+	elem = tplg_elem_new_common(tplg, NULL, name, SND_TPLG_TYPE_BYTES);
+	if (!elem)
+		return NULL;
+
+	/* init new byte control */
+	be = elem->bytes_ext;
+	snd_strlcpy(be->hdr.name, elem->id, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+	be->hdr.type = SND_SOC_TPLG_TYPE_BYTES;
+	be->size = elem->size;
+	hdr = &be->hdr;
+
+	/* parse some control params from attributes */
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr;
+
+		attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!attr->cfg)
+			continue;
+
+		ret = tplg_parse_control_bytes_param(tplg, attr->cfg, be, elem);
+		if (ret < 0) {
+			SNDERR("Error parsing control bytes params for %s\n", object->name);
+			return NULL;
+		}
+
+		if (!strcmp(attr->name, "access")) {
+			ret = parse_access_values(attr->cfg, &be->hdr);
+			if (ret < 0) {
+				SNDERR("Error parsing access attribute for %s\n", object->name);
+				return NULL;
+			} else  {
+				access_set = true;
+			}
+		}
+
+	}
+
+	/* parse the rest from child objects */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		if (!object->cfg)
+			continue;
+
+		if (!strcmp(child->class_name, "ops")) {
+			ret = tplg_parse_ops(tplg, child->cfg, hdr);
+			if (ret < 0) {
+				SNDERR("Error parsing ops for mixer %s\n", object->name);
+				return NULL;
+			}
+			continue;
+		}
+
+		if (!strcmp(child->class_name, "tlv")) {
+			ret = tplg2_parse_tlv(tplg, child, elem);
+			if (ret < 0) {
+				SNDERR("Error parsing tlv for mixer %s\n", object->name);
+				return NULL;
+			} else {
+				tlv_set = true;
+			}
+			continue;
+		}
+
+		if (!strcmp(child->class_name, "extops")) {
+			ret = tplg_parse_ext_ops(tplg, child->cfg, &be->hdr);
+			if (ret < 0) {
+				SNDERR("Error parsing ext ops for bytes %s\n", object->name);
+				return NULL;
+			}
+			continue;
+		}
+
+		/* add data reference for byte control by adding a new obect */
+		if (!strcmp(child->class_name, "data")) {
+			struct tplg_attribute *name;
+
+			name = tplg_get_attribute_by_name(&child->attribute_list, "name");
+			/* add reference to data elem */
+			ret = tplg_ref_add(elem, SND_TPLG_TYPE_DATA, name->value.string);
+			if (ret < 0) {
+				SNDERR("failed to add data elem %s to byte control %s\n",
+				       name->value.string, elem->id);
+				return NULL;
+			}
+		}
+	}
+
+	tplg_dbg("Bytes: %s Ops info: %d get: %d put: %d", elem->id, hdr->ops.info, hdr->ops.get,
+		 hdr->ops.put);
+	tplg_dbg("Ext Ops info: %d get: %d put: %d", be->ext_ops.info, be->ext_ops.get, be->ext_ops.put);
+
+	/* set CTL access to default values if none provided */
+	if (!access_set) {
+		be->hdr.access = SNDRV_CTL_ELEM_ACCESS_READWRITE;
+		if (tlv_set)
+			be->hdr.access |= SNDRV_CTL_ELEM_ACCESS_TLV_READ;
+	}
+
+	return elem;
+}
+
 static int tplg_create_widget_elem(snd_tplg_t *tplg, struct tplg_object *object)
 {
 	struct tplg_comp_object *widget_object = &object->object_type.component;
@@ -125,6 +439,61 @@ int tplg_build_comp_object(snd_tplg_t *tplg, struct tplg_object *object)
 		if (ret < 0) {
 			SNDERR("Error parsing widget params for %s\n", object->name);
 			return ret;
+		}
+	}
+
+	/* build controls */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+		struct tplg_elem *elem;
+		char *class_name = child->class_name;
+
+		if (!strcmp(class_name, "mixer")) {
+			struct tplg_attribute *name_attr;
+
+			/* skip if no name is provided */
+			name_attr = tplg_get_attribute_by_name(&child->attribute_list,
+								"name");
+
+			if (!name_attr || !strcmp(name_attr->value.string, ""))
+				continue;
+
+			elem = tplg_build_comp_mixer(tplg, child, name_attr->value.string);
+			if (!elem) {
+				SNDERR("Failed to build mixer control for %s\n", object->name);
+				return -EINVAL;
+			}
+
+			ret = tplg_ref_add(w_elem, SND_TPLG_TYPE_MIXER, elem->id);
+			if (ret < 0) {
+				SNDERR("failed to add mixer elem %s to widget elem %s\n",
+				       elem->id, w_elem->id);
+				return ret;
+			}
+		}
+
+		if (!strcmp(class_name, "bytes")) {
+			struct tplg_attribute *name_attr;
+
+			/* skip if no name is provided */
+			name_attr = tplg_get_attribute_by_name(&child->attribute_list,
+								"name");
+
+			if (!name_attr || !strcmp(name_attr->value.string, ""))
+				continue;
+
+			elem = tplg_build_comp_bytes(tplg, child, name_attr->value.string);
+			if (!elem) {
+				SNDERR("Failed to build bytes control for %s\n", object->name);
+				return -EINVAL;
+			}
+
+			ret = tplg_ref_add(w_elem, SND_TPLG_TYPE_BYTES, elem->id);
+			if (ret < 0) {
+				SNDERR("failed to add bytes control elem %s to widget elem %s\n",
+				       elem->id, w_elem->id);
+				return ret;
+			}
 		}
 	}
 
