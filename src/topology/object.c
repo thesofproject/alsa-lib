@@ -1196,6 +1196,13 @@ static int tplg_build_object(snd_tplg_t *tplg, struct tplg_object *object)
 		}
 		break;
 	}
+	case SND_TPLG_CLASS_TYPE_PCM:
+		ret = tplg_build_pcm_type_object(tplg, object);
+		if (ret < 0) {
+			SNDERR("Failed to build PCM class object %s\n", object->name);
+			return ret;
+		}
+		break;
 	case SND_TPLG_CLASS_TYPE_BASE:
 		ret = tplg_build_base_object(tplg, object);
 		if (ret < 0) {

@@ -131,3 +131,4 @@ struct tplg_object *tplg_object_elem_lookup(snd_tplg_t *tplg, const char *class_
 					    char *input);
 struct tplg_object *tplg_object_lookup_in_list(struct list_head *list, const char *class_name,
 					       char *input);
+int tplg_build_pcm_type_object(snd_tplg_t *tplg, struct tplg_object *object);
