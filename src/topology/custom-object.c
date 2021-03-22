@@ -25,6 +25,26 @@
 #include "tplg2_local.h"
 #include <ctype.h>
 
+static void tplg_set_stream_name(struct tplg_object *object)
+{
+	struct tplg_attribute *pcm_name, *pcm_id, *dir, *stream_name;
+	int ret;
+
+	pcm_name = tplg_get_attribute_by_name(&object->attribute_list, "pcm_name");
+	pcm_id = tplg_get_attribute_by_name(&object->attribute_list, "pcm_id");
+	dir = tplg_get_attribute_by_name(&object->attribute_list, "direction");
+	stream_name = tplg_get_attribute_by_name(&object->attribute_list, "stream_name");
+
+	ret = snprintf(stream_name->value.string, SNDRV_CTL_ELEM_ID_NAME_MAXLEN,
+		       "%s.%s.%ld", pcm_name->value.string,
+		       dir->value.string, pcm_id->value.integer);
+	if (ret > SNDRV_CTL_ELEM_ID_NAME_MAXLEN)
+		SNDERR("warning: widget stream name truncated \n");
+
+	stream_name->found = true;
+	stream_name->type = SND_CONFIG_TYPE_STRING;
+}
+
 /* pipeline object customization */
 int tplg_create_pipeline_object(struct tplg_class *class, struct tplg_object *object)
 {
@@ -49,6 +69,29 @@ int tplg_create_pipeline_object(struct tplg_class *class, struct tplg_object *ob
 			SNDERR("Unexpected child object type %d for %s\n", obj->type, object->name);
 			return -EINVAL;
 		}
+	}
+
+	return 0;
+}
+
+int tplg_update_automatic_attributes(snd_tplg_t *tplg, struct tplg_object *object,
+				     struct tplg_object *parent)
+{
+	struct list_head *pos;
+	int ret;
+
+	if (!strcmp(object->class_name, "host") ||
+	    !strcmp(object->class_name, "copier")) {
+		tplg_set_stream_name(object);
+	}
+
+	/* now update all automatic attributes for all child objects */
+	list_for_each(pos, &object->object_list) {
+		struct tplg_object *child = list_entry(pos, struct tplg_object, list);
+
+		ret = tplg_update_automatic_attributes(tplg, child, object);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;

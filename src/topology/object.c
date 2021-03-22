@@ -835,6 +835,13 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 		return NULL;
 	}
 
+	/* update automatic attributes in object */
+	ret = tplg_update_automatic_attributes(tplg, object, parent);
+	if (ret < 0) {
+		SNDERR("failed to update automatic attributes for %s\n", object->name);
+		return NULL;
+	}
+
 	if (list)
 		list_add_tail(&object->list, list);
 
