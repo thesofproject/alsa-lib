@@ -136,3 +136,4 @@ struct tplg_object *tplg_object_lookup_in_list(struct list_head *list, const cha
 					       char *input);
 int tplg_build_pcm_type_object(snd_tplg_t *tplg, struct tplg_object *object);
 int tplg_create_pipeline_object(struct tplg_class *class, struct tplg_object *object);
+int tplg_build_dapm_route(snd_tplg_t *tplg, struct tplg_object *object);

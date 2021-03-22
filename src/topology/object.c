@@ -1191,6 +1191,10 @@ static int tplg_build_base_object(snd_tplg_t *tplg, struct tplg_object *object)
 	if (!strcmp(object->class_name, "data"))
 		return tplg_build_data_object(tplg, object);
 
+	if (!strcmp(object->class_name, "connection"))
+		return tplg_build_dapm_route(tplg, object);
+
+
 	return 0;
 }
 

@@ -43,6 +43,74 @@ int tplg_create_component_object(struct tplg_object *object)
 	return 0;
 }
 
+static int tplg_dapm_route_validate_widget(snd_tplg_t *tplg, char *wname, char *dest)
+{
+	struct tplg_elem *w_elem;
+
+	/* check if it is a valid widget */
+	w_elem = tplg_elem_lookup(&tplg->widget_list, wname,
+			      SND_TPLG_TYPE_DAPM_WIDGET, SND_TPLG_INDEX_ALL);
+	if (!w_elem) {
+		SNDERR("No widget %s found\n", wname);
+		return -EINVAL;
+	}
+
+	snd_strlcpy(dest, w_elem->id, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+
+	return 0;
+}
+
+int tplg_build_dapm_route(snd_tplg_t *tplg, struct tplg_object *object)
+{
+	struct snd_soc_tplg_dapm_graph_elem *line;
+	struct list_head *pos;
+	struct tplg_elem *elem;
+	int ret;
+
+	/* create graph elem */
+	elem = tplg_elem_new_route(tplg, 0);
+	if (!elem)
+		return -ENOMEM;
+
+	line = elem->route;
+
+	/* set graph elem index and control values */
+	list_for_each(pos, &object->attribute_list) {
+		struct tplg_attribute *attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (!strcmp(attr->name, "pipeline_id")) {
+			elem->index = attr->value.integer;
+			continue;
+		}
+
+		if (!strcmp(attr->name, "control"))
+			snd_strlcpy(line->control, attr->value.string,
+				    SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+
+		if (!strcmp(attr->name, "source_widget")) {
+			ret = tplg_dapm_route_validate_widget(tplg, attr->value.string,
+							      line->source);
+			if (ret < 0) {
+				SNDERR("Failed to find source widget for route %s\n", object->name);
+				return ret;
+			}
+		}
+
+		if (!strcmp(attr->name, "sink_widget")) {
+			ret = tplg_dapm_route_validate_widget(tplg, attr->value.string,
+							      line->sink);
+			if (ret < 0) {
+				SNDERR("Failed to find sink widget for route %s\n", object->name);
+				return ret;
+			}
+		}
+	}
+
+	tplg_dbg("DAPM route: %s -> %s", line->source, line->sink);
+
+	return 0;
+}
+
 static int tplg2_parse_channel(struct tplg_object *object, struct tplg_elem *mixer_elem)
 {
 	struct snd_soc_tplg_mixer_control *mc = mixer_elem->mixer_ctrl;
