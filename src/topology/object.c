@@ -62,6 +62,92 @@ static int tplg_process_attributes(snd_config_t *cfg, struct tplg_object *object
 	return 0;
 }
 
+static int create_child_object_instance(snd_tplg_t *tplg, snd_config_t *cfg,
+					struct tplg_object *parent, struct list_head *list,
+					struct tplg_elem *class_elem)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	const char *id;
+
+	snd_config_for_each(i, next, cfg) {
+		struct tplg_object *object;
+
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0)
+			continue;
+
+		object = tplg_create_object(tplg, n, class_elem->class, parent, list);
+		if (!object) {
+			SNDERR("Error creating child %s for parent %s\n", id, parent->name);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+/* create child object */
+int tplg_create_child_object_type(snd_tplg_t *tplg, snd_config_t *cfg,
+			     struct tplg_object *parent, struct list_head *list)
+{
+	snd_config_iterator_t i, next;
+	struct tplg_elem *class_elem;
+	snd_config_t *n;
+	const char *id;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0)
+			continue;
+
+		/* check if it is a valid object */
+		class_elem = tplg_elem_lookup(&tplg->class_list, id,
+					      SND_TPLG_TYPE_CLASS, SND_TPLG_INDEX_ALL);
+
+		if (!class_elem)
+			continue;
+
+		ret = create_child_object_instance(tplg, n, parent, list, class_elem);
+		if (ret < 0) {
+			SNDERR("Error creating %s type child object for parent %s\n",
+			       class_elem->id, parent->name);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
+/* create child objects that are part of the parent object instance */
+static int tplg_create_child_objects(snd_tplg_t *tplg, snd_config_t *cfg,
+				   struct tplg_object *parent)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	const char *id;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
+		if (snd_config_get_id(n, &id) < 0)
+			continue;
+
+		if (strcmp(id, "Object"))
+			continue;
+
+		/* create object */
+		ret = tplg_create_child_object_type(tplg, n, parent, &parent->object_list);
+		if (ret < 0) {
+			SNDERR("Error creating child objects for %s\n", parent->name);
+			return ret;
+		}
+	}
+
+	return 0;
+}
+
 /* copy the preset attribute values and constraints */
 static int tplg_copy_attribute(struct tplg_attribute *attr, struct tplg_attribute *ref_attr)
 {
@@ -326,6 +412,13 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 	ret = tplg_copy_child_objects(tplg, class, object);
 	if (ret < 0) {
 		SNDERR("Failed to create DAI object for %s\n", object->name);
+		return NULL;
+	}
+
+	/* create child objects that are part of the object instance */
+	ret = tplg_create_child_objects(tplg, cfg, object);
+	if (ret < 0) {
+		SNDERR("failed to create child objects for %s\n", object->name);
 		return NULL;
 	}
 
