@@ -98,3 +98,7 @@ tplg_create_object(snd_tplg_t *tplg, snd_config_t *cfg, struct tplg_class *class
 		   struct tplg_object *parent, struct list_head *list);
 struct tplg_attribute *tplg_get_attribute_by_name(struct list_head *list, const char *name);
 void tplg2_free_elem_object(struct tplg_elem *elem);
+struct tplg_object *tplg_object_elem_lookup(snd_tplg_t *tplg, const char *class_name,
+					    char *input);
+struct tplg_object *tplg_object_lookup_in_list(struct list_head *list, const char *class_name,
+					       char *input);

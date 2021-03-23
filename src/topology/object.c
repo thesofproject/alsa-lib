@@ -20,6 +20,92 @@
 #include "tplg2_local.h"
 #include <ctype.h>
 
+static bool tplg_object_unique_attribute_match(struct tplg_object *object, char *input)
+{
+	struct tplg_attribute *attr;
+	struct list_head *pos;
+	bool found = false;
+
+	/* find attribute with TPLG_CLASS_ATTRIBUTE_MASK_UNIQUE mask */
+	list_for_each(pos, &object->attribute_list) {
+		attr = list_entry(pos, struct tplg_attribute, list);
+
+		if (attr->constraint.mask & TPLG_CLASS_ATTRIBUTE_MASK_UNIQUE) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found)
+		return false;
+
+	/* check if the value matches based on type */
+	switch (attr->type) {
+	case SND_CONFIG_TYPE_INTEGER:
+		if (attr->value.integer == atoi(input))
+			return true;
+		break;
+	case SND_CONFIG_TYPE_STRING:
+		if (!strcmp(attr->value.string, input))
+			return true;
+		break;
+	default:
+		break;
+	}
+
+	return false;
+}
+
+/* look up object based on class type and input value for the unique attribute */
+struct tplg_object *tplg_object_elem_lookup(snd_tplg_t *tplg, const char *class_name,
+					    char *input)
+{
+        struct list_head *pos;
+        struct tplg_elem *elem;
+
+        if (!class_name)
+                return NULL;
+
+        list_for_each(pos, &tplg->object_list) {
+		struct tplg_object *object;
+
+		elem = list_entry(pos, struct tplg_elem, list);
+		object = elem->object;
+
+		/* check if class_name natches */
+                if (strcmp(object->class_name, class_name))
+			continue;
+
+		if (tplg_object_unique_attribute_match(object, input))
+			return elem->object;
+        }
+
+        return NULL;
+}
+
+/* look up object based on class type and unique attribute value in a list */
+struct tplg_object *tplg_object_lookup_in_list(struct list_head *list, const char *class_name,
+					       char *input)
+{
+        struct list_head *pos;
+
+        if (!class_name)
+                return NULL;
+
+        list_for_each(pos, list) {
+		struct tplg_object *object = list_entry(pos, struct tplg_object, list);
+
+		/* check if class_name natches */
+                if (strcmp(object->class_name, class_name))
+			continue;
+
+		if (tplg_object_unique_attribute_match(object, input))
+			return object;
+        }
+
+        return NULL;
+}
+
 /* Process the attribute values provided during object instantiation */
 static int tplg_process_attributes(snd_config_t *cfg, struct tplg_object *object)
 {
