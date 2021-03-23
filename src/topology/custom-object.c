@@ -19,6 +19,8 @@
  * This file contains the create/build routines for custom classes that are not
  * DAI, component or PCM type
  */
+#define TPLG_DEBUG
+
 #include "list.h"
 #include "local.h"
 #include "tplg_local.h"
@@ -188,11 +190,93 @@ static int tplg_update_buffer_size(struct tplg_object *buffer_object,
 	return 0;
 }
 
+/*
+ * Widget names for pipeline endpoints can be of the following type:
+ * "Object.class.index" which refers to an object of class "class" with index in the
+ * parent object_list or the global topology object_list
+ */
+static int tplg_set_widget_name(snd_tplg_t *tplg, struct tplg_object *object,
+				struct tplg_object *parent, char *string,
+				struct tplg_attribute *dest_widget)
+{
+	struct tplg_object *child = NULL;
+	char *object_str, *last_dot;
+	char class_name[SNDRV_CTL_ELEM_ID_NAME_MAXLEN], *index_str;
+
+	/* strip "Object." from the string */
+	object_str = strchr(string, '.');
+	if (!object_str) {
+		SNDERR("Incomplete name for source object in route %s for parent %s\n",
+		       object->name, parent->name);
+		return -EINVAL;
+	}
+
+	/* get last occurence of '.' */
+	last_dot = strrchr(string, '.');
+
+	/* get index of object */
+	index_str = strchr(object_str + 1, '.');
+	if (!index_str) {
+		SNDERR("No unique attribute for object in route %s for parent %s\n",
+		       object->name, parent->name);
+		return 0;
+	}
+
+	/* get class name */
+	snd_strlcpy(class_name, object_str + 1, strlen(object_str) - strlen(index_str));
+
+
+	/* look up object from parent object_list */
+	if (parent)
+		child = tplg_object_lookup_in_list(&parent->object_list, class_name,
+						   index_str + 1);
+	else
+		/* look up object from global list */
+		child = tplg_object_elem_lookup(tplg, class_name, index_str + 1);
+
+	if (!child) {
+		SNDERR("No object %s.%s found in parent %s\n",
+		       class_name, index_str, object->name, parent->name);
+		return -EINVAL;
+	}
+
+	/* end of string? */
+	if (last_dot != index_str) {
+		char *str = strchr(index_str + 1, '.');
+		char new_str[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+
+		snprintf(new_str, SNDRV_CTL_ELEM_ID_NAME_MAXLEN, "%s%s", "Object", str);
+
+		return tplg_set_widget_name(tplg, object, child, new_str, dest_widget);
+	}
+
+	snd_strlcpy(dest_widget->value.string, child->name, SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+
+	return 0;
+}
+
+
 int tplg_update_automatic_attributes(snd_tplg_t *tplg, struct tplg_object *object,
 				     struct tplg_object *parent)
 {
 	struct list_head *pos;
 	int ret;
+
+	/* set widget name for pipeline endpoint objects */
+	if (!strcmp(object->class_name, "endpoint")) {
+		struct tplg_attribute *widget_name, *widget;
+
+		widget = tplg_get_attribute_by_name(&object->attribute_list, "widget");
+		widget_name = tplg_get_attribute_by_name(&object->attribute_list, "widget_name");
+		ret = tplg_set_widget_name(tplg, object, parent, widget->value.string,
+					   widget_name);
+		if (ret < 0) {
+			SNDERR("Failed to set source widget name for %s\n", object->name);
+			return ret;
+		}
+
+		tplg_dbg("endpoint widget name %s", widget_name->value.string);
+	}
 
 	if (!strcmp(object->class_name, "host") ||
 	    !strcmp(object->class_name, "copier")) {
