@@ -60,7 +60,7 @@ static const struct map_elem channel_map[] = {
 };
 
 
-static int lookup_channel(const char *c)
+int lookup_channel(const char *c)
 {
 	unsigned int i;
 
