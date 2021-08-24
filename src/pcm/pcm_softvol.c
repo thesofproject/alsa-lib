@@ -718,6 +718,8 @@ static int add_tlv_info(snd_pcm_softvol_t *svol, snd_ctl_elem_info_t *cinfo,
 	tlv[SNDRV_CTL_TLVO_DB_SCALE_MIN] = (int)(svol->min_dB * 100);
 	tlv[SNDRV_CTL_TLVO_DB_SCALE_MUTE_AND_STEP] =
 		(int)((svol->max_dB - svol->min_dB) * 100 / svol->max_val);
+	if (sizeof(tlv) <= old_tlv_size && memcmp(tlv, old_tlv, sizeof(tlv)) == 0)
+		return 0;
 	return snd_ctl_elem_tlv_write(svol->ctl, &cinfo->id, tlv);
 }
 

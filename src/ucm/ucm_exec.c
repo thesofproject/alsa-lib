@@ -30,6 +30,7 @@
 #include "ucm_local.h"
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <limits.h>
 #include <dirent.h>
 
 static pthread_mutex_t fork_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -73,6 +74,7 @@ static int find_exec(const char *name, char *out, size_t len)
 				    || !(st.st_mode & S_IEXEC))
 					continue;
 				snd_strlcpy(out, bin, len);
+				closedir(dir);
 				return 1;
 			}
 			closedir(dir);
@@ -184,7 +186,11 @@ int uc_mgr_exec(const char *prog)
 		return -EINVAL;
 
 	prog = argv[0];
-	if (argv[0][0] != '/' && argv[0][0] != '.') {
+	if (prog == NULL) {
+		err = -EINVAL;
+		goto __error;
+	}
+	if (prog[0] != '/' && prog[0] != '.') {
 		if (!find_exec(argv[0], bin, sizeof(bin))) {
 			err = -ENOEXEC;
 			goto __error;

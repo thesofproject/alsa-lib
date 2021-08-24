@@ -1627,43 +1627,37 @@ int snd_pcm_direct_set_timer_params(snd_pcm_direct_t *dmix)
 int snd_pcm_direct_check_interleave(snd_pcm_direct_t *dmix, snd_pcm_t *pcm)
 {
 	unsigned int chn, channels;
-	int bits, interleaved = 1;
+	int bits;
 	const snd_pcm_channel_area_t *dst_areas;
 	const snd_pcm_channel_area_t *src_areas;
 
 	bits = snd_pcm_format_physical_width(pcm->format);
 	if ((bits % 8) != 0)
-		interleaved = 0;
+		goto __nointerleaved;
 	channels = dmix->channels;
+	if (channels != dmix->spcm->channels)
+		goto __nointerleaved;
 	dst_areas = snd_pcm_mmap_areas(dmix->spcm);
 	src_areas = snd_pcm_mmap_areas(pcm);
 	for (chn = 1; chn < channels; chn++) {
-		if (dst_areas[chn-1].addr != dst_areas[chn].addr) {
-			interleaved = 0;
-			break;
-		}
-		if (src_areas[chn-1].addr != src_areas[chn].addr) {
-			interleaved = 0;
-			break;
-		}
+		if (dst_areas[chn-1].addr != dst_areas[chn].addr)
+			goto __nointerleaved;
+		if (src_areas[chn-1].addr != src_areas[chn].addr)
+			goto __nointerleaved;
 	}
 	for (chn = 0; chn < channels; chn++) {
-		if (dmix->bindings && dmix->bindings[chn] != chn) {
-			interleaved = 0;
-			break;
-		}
+		if (dmix->bindings && dmix->bindings[chn] != chn)
+			goto __nointerleaved;
 		if (dst_areas[chn].first != chn * bits ||
-		    dst_areas[chn].step != channels * bits) {
-			interleaved = 0;
-			break;
-		}
+		    dst_areas[chn].step != channels * bits)
+			goto __nointerleaved;
 		if (src_areas[chn].first != chn * bits ||
-		    src_areas[chn].step != channels * bits) {
-			interleaved = 0;
-			break;
-		}
+		    src_areas[chn].step != channels * bits)
+			goto __nointerleaved;
 	}
-	return dmix->interleaved = interleaved;
+	return dmix->interleaved = 1;
+__nointerleaved:
+	return dmix->interleaved = 0;
 }
 
 /*
@@ -1857,8 +1851,6 @@ static int _snd_pcm_direct_get_slave_ipc_offset(snd_config_t *root,
 			continue;
 		}
 	}
-	if (card < 0)
-		card = 0;
 	if (device < 0)
 		device = 0;
 	if (subdevice < 0)
@@ -2126,24 +2118,20 @@ int _snd_pcm_direct_new(snd_pcm_t **pcmp, snd_pcm_direct_t **_dmix, int type,
 	dmix->type = type;
 
 	ret = snd_pcm_new(pcmp, type, name, stream, mode);
-	if (ret < 0) {
-_err_nosem:
-		free(dmix->bindings);
-		free(dmix);
-		return ret;
-	}
+	if (ret < 0)
+		goto _err_nosem;
 
 	while (1) {
 		ret = snd_pcm_direct_semaphore_create_or_connect(dmix);
 		if (ret < 0) {
 			SNDERR("unable to create IPC semaphore");
-			goto _err_nosem;
+			goto _err_nosem_free;
 		}
 		ret = snd_pcm_direct_semaphore_down(dmix, DIRECT_IPC_SEM_CLIENT);
 		if (ret < 0) {
 			snd_pcm_direct_semaphore_discard(dmix);
 			if (--fail_sem_loop <= 0)
-				goto _err_nosem;
+				goto _err_nosem_free;
 			continue;
 		}
 		break;
@@ -2153,10 +2141,17 @@ _err_nosem:
 	if (ret < 0) {
 		SNDERR("unable to create IPC shm instance");
 		snd_pcm_direct_semaphore_up(dmix, DIRECT_IPC_SEM_CLIENT);
-		goto _err_nosem;
+		goto _err_nosem_free;
 	} else {
 		*_dmix = dmix;
 	}
 
+	return ret;
+_err_nosem_free:
+	snd_pcm_free(*pcmp);
+	*pcmp = NULL;
+_err_nosem:
+	free(dmix->bindings);
+	free(dmix);
 	return ret;
 }

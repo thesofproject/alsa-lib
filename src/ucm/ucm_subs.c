@@ -224,7 +224,11 @@ static snd_config_t *parse_lookup_query(const char *query)
 		uc_error("unable to create memory input buffer");
 		return NULL;
 	}
-	snd_config_top(&config);
+	err = snd_config_top(&config);
+	if (err < 0) {
+		snd_input_close(input);
+		return NULL;
+	}
 	err = snd_config_load(config, input);
 	snd_input_close(input);
 	if (err < 0) {
@@ -485,7 +489,7 @@ static int rval_device_lookup_init(snd_use_case_mgr_t *uc_mgr,
 		uc_error("Missing device type!");
 		return -EINVAL;
 	}
-	for (t = types; t; t++)
+	for (t = types; t->name; t++)
 		if (strcasecmp(t->name, s) == 0)
 			return t->init(iter, config);
 	uc_error("Device type '%s' is invalid", s);

@@ -243,6 +243,7 @@ static int snd_pcm_dshare_status(snd_pcm_t *pcm, snd_pcm_status_t * status)
 		break;
 	}
 	status->state = snd_pcm_dshare_state(pcm);
+	status->hw_ptr = *pcm->hw.ptr; /* boundary may be different */
 	status->appl_ptr = *pcm->appl.ptr; /* slave PCM doesn't set appl_ptr */
 	status->trigger_tstamp = dshare->trigger_tstamp;
 	status->avail = snd_pcm_mmap_playback_avail(pcm);
@@ -690,8 +691,8 @@ int snd_pcm_dshare_open(snd_pcm_t **pcmp, const char *name,
 			snd_config_t *root, snd_config_t *sconf,
 			snd_pcm_stream_t stream, int mode)
 {
-	snd_pcm_t *pcm = NULL, *spcm = NULL;
-	snd_pcm_direct_t *dshare = NULL;
+	snd_pcm_t *pcm, *spcm = NULL;
+	snd_pcm_direct_t *dshare;
 	int ret, first_instance;
 	unsigned int chn;
 
@@ -851,12 +852,9 @@ int snd_pcm_dshare_open(snd_pcm_t **pcmp, const char *name,
 	} else
 		snd_pcm_direct_semaphore_up(dshare, DIRECT_IPC_SEM_CLIENT);
  _err_nosem:
-	if (dshare) {
-		free(dshare->bindings);
-		free(dshare);
-	}
-	if (pcm)
-		snd_pcm_free(pcm);
+	free(dshare->bindings);
+	free(dshare);
+	snd_pcm_free(pcm);
 	return ret;
 }
 

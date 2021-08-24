@@ -160,11 +160,12 @@ static int if_eval_regex_match(snd_use_case_mgr_t *uc_mgr, snd_config_t *eval)
 	if (err < 0)
 		return err;
 	err = regcomp(&re, s, options);
-	free(s);
 	if (err) {
 		uc_error("Regex '%s' compilation failed (code %d)", s, err);
+		free(s);
 		return -EINVAL;
 	}
+	free(s);
 
 	err = uc_mgr_get_substituted_value(uc_mgr, &s, string);
 	if (err < 0) {
@@ -271,7 +272,7 @@ static int if_eval_control_exists(snd_use_case_mgr_t *uc_mgr, snd_config_t *eval
 
 static int if_eval_path(snd_use_case_mgr_t *uc_mgr, snd_config_t *eval)
 {
-	const char *path, *mode = NULL;
+	const char *path, *mode = "";
 	int err, amode = F_OK;
 
 	if (uc_mgr->conf_format < 4) {
@@ -304,7 +305,11 @@ static int if_eval_path(snd_use_case_mgr_t *uc_mgr, snd_config_t *eval)
 		return -EINVAL;
 	}
 
+#ifdef HAVE_EACCESS
 	if (eaccess(path, amode))
+#else
+	if (access(path, amode))
+#endif
 		return 0;
 
 	return 1;

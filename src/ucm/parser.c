@@ -1779,7 +1779,7 @@ static int parse_verb_file(snd_use_case_mgr_t *uc_mgr,
 			err = parse_libconfig(uc_mgr, n);
 			if (err < 0) {
 				uc_error("error: failed to parse LibConfig");
-				return err;
+				goto _err;
 			}
 			continue;
 		}
@@ -2518,7 +2518,11 @@ int uc_mgr_scan_master_configs(const char **_list[])
 
 		snprintf(fn, sizeof(fn), "%s.conf", d_name);
 		ucm_filename(filename, sizeof(filename), 2, d_name, fn);
+#ifdef HAVE_EACCESS
 		if (eaccess(filename, R_OK))
+#else
+		if (access(filename, R_OK))
+#endif
 			continue;
 
 		err = uc_mgr_config_load(2, filename, &cfg);

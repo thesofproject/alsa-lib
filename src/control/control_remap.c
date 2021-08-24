@@ -323,7 +323,7 @@ static int snd_ctl_remap_nonblock(snd_ctl_t *ctl, int nonblock)
 static int snd_ctl_remap_async(snd_ctl_t *ctl, int sig, pid_t pid)
 {
 	snd_ctl_remap_t *priv = ctl->private_data;
-	return snd_ctl_remap_async(priv->child, sig, pid);
+	return snd_ctl_async(priv->child, sig, pid);
 }
 
 static int snd_ctl_remap_subscribe_events(snd_ctl_t *ctl, int subscribe)
@@ -1040,7 +1040,7 @@ static int parse_map_vindex(struct snd_ctl_map_ctl *mctl, snd_config_t *conf)
 
 	snd_config_for_each(i, next, conf) {
 		snd_config_t *n = snd_config_iterator_entry(i);
-		long idx, chn;
+		long idx = -1, chn = -1;
 		const char *id;
 		if (snd_config_get_id(n, &id) < 0)
 			continue;
@@ -1154,6 +1154,10 @@ int snd_ctl_remap_open(snd_ctl_t **handlep, const char *name, snd_config_t *rema
 	snd_ctl_t *ctl;
 	int result, err;
 
+	/* no-op, remove the plugin */
+	if (!remap && !map)
+		goto _noop;
+
 	priv = calloc(1, sizeof(*priv));
 	if (priv == NULL)
 		return -ENOMEM;
@@ -1173,6 +1177,11 @@ int snd_ctl_remap_open(snd_ctl_t **handlep, const char *name, snd_config_t *rema
 	/* no-op check, remove the plugin */
 	if (priv->map_items == 0 && priv->remap_items == 0) {
 		remap_free(priv);
+ _noop:
+		free(child->name);
+		child->name = name ? strdup(name) : NULL;
+		if (name && !child->name)
+			return -ENOMEM;
 		*handlep = child;
 		return 0;
 	}
@@ -1312,11 +1321,6 @@ int _snd_ctl_remap_open(snd_ctl_t **handlep, char *name, snd_config_t *root, snd
 	err = _snd_ctl_open_child(&cctl, root, child, mode, conf);
 	if (err < 0)
 		return err;
-	/* no-op, remove the plugin */
-	if (!remap && !map) {
-		*handlep = cctl;
-		return 0;
-	}
 	err = snd_ctl_remap_open(handlep, name, remap, map, cctl, mode);
 	if (err < 0)
 		snd_ctl_close(cctl);

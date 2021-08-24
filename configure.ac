@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.59)
-AC_INIT(alsa-lib, 1.2.5pre1)
+AC_INIT(alsa-lib, 1.2.5)
 
 AC_CONFIG_SRCDIR([src/control/control.c])
 AC_CONFIG_MACRO_DIR([m4])
@@ -50,6 +50,7 @@ AC_HEADER_TIME
 dnl Checks for library functions.
 AC_PROG_GCC_TRADITIONAL
 AC_CHECK_FUNCS([uselocale])
+AC_CHECK_FUNCS([eaccess])
 
 SAVE_LIBRARY_VERSION
 AC_SUBST(LIBTOOL_VERSION_INFO)

@@ -37,6 +37,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <limits.h>
 
 /*
@@ -605,8 +606,10 @@ static int execute_cfgsave(snd_use_case_mgr_t *uc_mgr, const char *filename)
 		uc_error("unable to open file '%s': %s", file, snd_strerror(err));
 		goto _err;
 	}
-	if (!config || snd_config_is_empty(config))
+	if (!config || snd_config_is_empty(config)) {
+		snd_output_close(out);
 		goto _err;
+	}
 	if (with_root) {
 		snd_output_printf(out, "%s ", root);
 		err = _snd_config_save_node_value(config, out, 0);
@@ -2139,6 +2142,25 @@ static int get_alibcfg(snd_use_case_mgr_t *uc_mgr, char **str)
 }
 
 /**
+ * \brief Get device prefix for private alsa-lib configuration
+ * \param uc_mgr Use case manager
+ * \param str Returned value string
+ * \return Zero on success (value is filled), otherwise a negative error code
+ */
+static int get_alibpref(snd_use_case_mgr_t *uc_mgr, char **str)
+{
+	const size_t l = 10;
+	char *s;
+
+	s = malloc(l);
+	if (s == NULL)
+		return -ENOMEM;
+	snprintf(s, l, "_ucm%04X.", uc_mgr->ucm_card_number);
+	*str = s;
+	return 0;
+}
+
+/**
  * \brief Get current - string
  * \param uc_mgr Use case manager
  * \param identifier 
@@ -2193,6 +2215,8 @@ int snd_use_case_get(snd_use_case_mgr_t *uc_mgr,
 
 	} else if (strcmp(identifier, "_alibcfg") == 0) {
 		err = get_alibcfg(uc_mgr, (char **)value);
+	} else if (strcmp(identifier, "_alibpref") == 0) {
+		err = get_alibpref(uc_mgr, (char **)value);
 	} else if (identifier[0] == '_') {
 		err = -ENOENT;
 	} else {
