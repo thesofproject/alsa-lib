@@ -322,29 +322,29 @@ int snd_tplg_build_file(snd_tplg_t *tplg,
 	return snd_tplg_build(tplg, outfile);
 }
 
-int snd_tplg_add_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int snd_tplg_add_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	switch (t->type) {
 	case SND_TPLG_TYPE_MIXER:
-		return tplg_add_mixer_object(tplg, t);
+		return tplg_add_mixer_element(tplg, t);
 	case SND_TPLG_TYPE_ENUM:
-		return tplg_add_enum_object(tplg, t);
+		return tplg_add_enum_element(tplg, t);
 	case SND_TPLG_TYPE_BYTES:
-		return tplg_add_bytes_object(tplg, t);
+		return tplg_add_bytes_element(tplg, t);
 	case SND_TPLG_TYPE_DAPM_WIDGET:
-		return tplg_add_widget_object(tplg, t);
+		return tplg_add_widget_element(tplg, t);
 	case SND_TPLG_TYPE_DAPM_GRAPH:
-		return tplg_add_graph_object(tplg, t);
+		return tplg_add_graph_element(tplg, t);
 	case SND_TPLG_TYPE_PCM:
-		return tplg_add_pcm_object(tplg, t);
+		return tplg_add_pcm_element(tplg, t);
 	case SND_TPLG_TYPE_DAI:
-		return tplg_add_dai_object(tplg, t);
+		return tplg_add_dai_element(tplg, t);
 	case SND_TPLG_TYPE_LINK:
 	case SND_TPLG_TYPE_BE:
 	case SND_TPLG_TYPE_CC:
-		return tplg_add_link_object(tplg, t);
+		return tplg_add_link_element(tplg, t);
 	default:
-		SNDERR("invalid object type %d", t->type);
+		SNDERR("invalid element type %d", t->type);
 		return -EINVAL;
 	};
 }
@@ -468,6 +468,8 @@ snd_tplg_t *snd_tplg_create(int flags)
 	INIT_LIST_HEAD(&tplg->token_list);
 	INIT_LIST_HEAD(&tplg->tuple_list);
 	INIT_LIST_HEAD(&tplg->hw_cfg_list);
+	INIT_LIST_HEAD(&tplg->class_list);
+	INIT_LIST_HEAD(&tplg->object_list);
 
 	return tplg;
 }
@@ -482,6 +484,8 @@ void snd_tplg_free(snd_tplg_t *tplg)
 	free(tplg->bin);
 	free(tplg->manifest_pdata);
 
+	tplg_elem_free_list(&tplg->object_list);
+	tplg_elem_free_list(&tplg->class_list);
 	tplg_elem_free_list(&tplg->tlv_list);
 	tplg_elem_free_list(&tplg->widget_list);
 	tplg_elem_free_list(&tplg->pcm_list);

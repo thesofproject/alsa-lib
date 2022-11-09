@@ -94,6 +94,8 @@ struct snd_tplg {
 	struct list_head pcm_config_list;
 	struct list_head pcm_caps_list;
 	struct list_head hw_cfg_list;
+	struct list_head class_list;
+	struct list_head object_list;
 
 	/* type-specific control lists */
 	struct list_head mixer_list;
@@ -138,6 +140,8 @@ struct tplg_tuple {
 struct tplg_tuple_set {
 	unsigned int  type; /* uuid, bool, byte, short, word, string*/
 	unsigned int  num_tuples;
+	char token_ref[SNDRV_CTL_ELEM_ID_NAME_MAXLEN];
+	struct list_head list; /* item in tuple_set_list */
 	struct tplg_tuple tuple[0];
 };
 
@@ -157,7 +161,7 @@ struct tplg_elem {
 	int index;
 	enum snd_tplg_type type;
 
-	int size; /* total size of this object inc pdata and ref objects */
+	int size; /* total size of this element inc pdata and ref objects */
 	int compound_elem; /* dont write this element as individual elem */
 	int vendor_type; /* vendor type for private data */
 
@@ -183,6 +187,8 @@ struct tplg_elem {
 		struct tplg_vendor_tokens *tokens;
 		struct tplg_vendor_tuples *tuples;
 		struct snd_soc_tplg_manifest *manifest;
+		struct tplg_class *class;
+		struct tplg_object *object;
 	};
 
 	/* an element may refer to other elements:
@@ -288,7 +294,6 @@ int tplg_parse_dai(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_cc(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
 int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg, void *priv);
-
 unsigned int tplg_get_tuple_size(int type);
 void tplg_free_tuples(void *obj);
 
@@ -341,11 +346,11 @@ int tplg_add_data(snd_tplg_t *tplg, struct tplg_elem *parent,
 		  const void *bin, size_t size);
 int tplg_add_data_bytes(snd_tplg_t *tplg, struct tplg_elem *parent,
 			const char *suffix, const void *bin, size_t size);
-int tplg_add_mixer_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_enum_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_bytes_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_widget_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_graph_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_mixer_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_enum_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_bytes_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_widget_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_graph_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
 
 int tplg_add_mixer(snd_tplg_t *tplg, struct snd_tplg_mixer_template *mixer,
 		   struct tplg_elem **e);
@@ -357,9 +362,9 @@ int tplg_add_bytes(snd_tplg_t *tplg, struct snd_tplg_bytes_template *bytes_ctl,
 int tplg_build_pcms(snd_tplg_t *tplg, unsigned int type);
 int tplg_build_dais(snd_tplg_t *tplg, unsigned int type);
 int tplg_build_links(snd_tplg_t *tplg, unsigned int type);
-int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
-int tplg_add_dai_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_link_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_pcm_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int tplg_add_dai_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
 
 int tplg_nice_value_format(char *dst, size_t dst_size, unsigned int value);
 
@@ -458,3 +463,27 @@ int tplg_decode_pcm(snd_tplg_t *tplg, size_t pos,
 int tplg_decode_dai(snd_tplg_t *tplg, size_t pos,
 		    struct snd_soc_tplg_hdr *hdr,
 		    void *bin, size_t size);
+int lookup_channel(const char *c);
+int tplg_set_hw_config_param(snd_config_t *n, struct snd_soc_tplg_hw_config *hw_cfg);
+int tplg_parse_stream_caps_param(snd_config_t *n, struct snd_soc_tplg_stream_caps *sc);
+int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *elem);
+int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
+			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem);
+int lookup_widget(const char *w);
+int tplg_parse_control_mixer_param(snd_tplg_t *tplg, snd_config_t *n,
+				   struct snd_soc_tplg_mixer_control *mc,
+				   struct tplg_elem *elem);
+int tplg_parse_control_bytes_param(snd_tplg_t *tplg, snd_config_t *n,
+				    struct snd_soc_tplg_bytes_control *be,
+				    struct tplg_elem *elem);
+int parse_access_values(snd_config_t *cfg, struct snd_soc_tplg_ctl_hdr *hdr);
+int tplg_parse_tlv_dbscale_param(snd_config_t *n, struct snd_soc_tplg_tlv_dbscale *scale);
+int scan_tuple_set(struct tplg_elem *elem, struct tplg_tuple_set *tuple_set,
+		   struct tplg_vendor_tokens *tokens, int size);
+int get_uuid(const char *str, unsigned char *uuid_le);
+int get_tuple_type(const char *name);
+int get_token_value(const char *token_id, struct tplg_vendor_tokens *tokens);
+struct tplg_elem *tplg_elem_new_route(snd_tplg_t *tplg, int index);
+int tplg_parse_data_hex(snd_config_t *cfg, struct tplg_elem *elem, int width);
+int tplg_parse_dapm_widget_param(snd_config_t *n, struct snd_soc_tplg_dapm_widget *widget,
+				 struct tplg_elem *elem);

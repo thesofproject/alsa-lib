@@ -766,6 +766,8 @@ enum snd_tplg_type {
 	SND_TPLG_TYPE_LINK,		/*!< Physical DAI link */
 	SND_TPLG_TYPE_HW_CONFIG,	/*!< Link HW config */
 	SND_TPLG_TYPE_DAI,		/*!< Physical DAI */
+	SND_TPLG_TYPE_CLASS,		/*!< Class */
+	SND_TPLG_TYPE_OBJECT,		/*!< Object */
 };
 
 /** Fit for all user cases */
@@ -1102,12 +1104,12 @@ typedef struct snd_tplg_obj_template {
 } snd_tplg_obj_template_t;
 
 /**
- * \brief Register topology template object.
+ * \brief Register topology template element.
  * \param tplg Topology instance.
- * \param t Template object.
+ * \param t Template element.
  * \return Zero on success, otherwise a negative error code
  */
-int snd_tplg_add_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
+int snd_tplg_add_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t);
 
 /**
  * \brief Build all registered topology data into binary file.

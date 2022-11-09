@@ -394,6 +394,126 @@ static int parse_unsigned(snd_config_t *n, void *dst)
 	return 0;
 }
 
+int tplg_parse_stream_caps_param(snd_config_t *n, struct snd_soc_tplg_stream_caps *sc)
+{
+	const char *id, *val;
+	char *s;
+	int err;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "formats") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		s = strdup(val);
+		if (s == NULL)
+			return -ENOMEM;
+
+		err = split_format(sc, s);
+		free(s);
+
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "rates") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		s = strdup(val);
+		if (!s)
+			return -ENOMEM;
+
+		err = split_rate(sc, s);
+		free(s);
+
+		if (err < 0)
+			return err;
+
+		tplg_dbg("\t\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "rate_min") == 0) {
+		if (parse_unsigned(n, &sc->rate_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rate_max") == 0) {
+		if (parse_unsigned(n, &sc->rate_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "channels_min") == 0) {
+		if (parse_unsigned(n, &sc->channels_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "channels_max") == 0) {
+		if (parse_unsigned(n, &sc->channels_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "periods_min") == 0) {
+		if (parse_unsigned(n, &sc->periods_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "periods_max") == 0) {
+		if (parse_unsigned(n, &sc->periods_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "period_size_min") == 0) {
+		if (parse_unsigned(n, &sc->period_size_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "period_size_max") == 0) {
+		if (parse_unsigned(n, &sc->period_size_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "buffer_size_min") == 0) {
+		if (parse_unsigned(n, &sc->buffer_size_min))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "buffer_size_max") == 0) {
+		if (parse_unsigned(n, &sc->buffer_size_max))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "sig_bits") == 0) {
+		if (parse_unsigned(n, &sc->sig_bits))
+			return -EINVAL;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse pcm stream capabilities */
 int tplg_parse_stream_caps(snd_tplg_t *tplg,
 			   snd_config_t *cfg,
@@ -403,8 +523,6 @@ int tplg_parse_stream_caps(snd_tplg_t *tplg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val;
-	char *s;
 	int err;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_STREAM_CAPS);
@@ -419,117 +537,10 @@ int tplg_parse_stream_caps(snd_tplg_t *tplg,
 
 	snd_config_for_each(i, next, cfg) {
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
 
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "formats") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			s = strdup(val);
-			if (s == NULL)
-				return -ENOMEM;
-
-			err = split_format(sc, s);
-			free(s);
-
-			if (err < 0)
-				return err;
-
-			tplg_dbg("\t\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "rates") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			s = strdup(val);
-			if (!s)
-				return -ENOMEM;
-
-			err = split_rate(sc, s);
-			free(s);
-
-			if (err < 0)
-				return err;
-
-			tplg_dbg("\t\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "rate_min") == 0) {
-			if (parse_unsigned(n, &sc->rate_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rate_max") == 0) {
-			if (parse_unsigned(n, &sc->rate_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "channels_min") == 0) {
-			if (parse_unsigned(n, &sc->channels_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "channels_max") == 0) {
-			if (parse_unsigned(n, &sc->channels_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "periods_min") == 0) {
-			if (parse_unsigned(n, &sc->periods_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "periods_max") == 0) {
-			if (parse_unsigned(n, &sc->periods_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "period_size_min") == 0) {
-			if (parse_unsigned(n, &sc->period_size_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "period_size_max") == 0) {
-			if (parse_unsigned(n, &sc->period_size_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "buffer_size_min") == 0) {
-			if (parse_unsigned(n, &sc->buffer_size_min))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "buffer_size_max") == 0) {
-			if (parse_unsigned(n, &sc->buffer_size_max))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "sig_bits") == 0) {
-			if (parse_unsigned(n, &sc->sig_bits))
-				return -EINVAL;
-			continue;
-		}
-
+		err = tplg_parse_stream_caps_param(n, sc);
+		if (err < 0)
+			return err;
 	}
 
 	return 0;
@@ -835,6 +846,94 @@ static int save_flags(unsigned int flags, unsigned int mask,
 	return err;
 }
 
+int tplg_parse_pcm_param(snd_tplg_t *tplg, snd_config_t *n, struct tplg_elem *elem)
+{
+	struct snd_soc_tplg_pcm *pcm = elem->pcm;
+	const char *id;
+	int err, ival;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &pcm->pcm_id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "pcm") == 0) {
+		err = tplg_parse_compound(tplg, n,
+			tplg_parse_streams, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "compress") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		pcm->compress = ival;
+
+		tplg_dbg("\t%s: %d", id, ival);
+		return 0;
+	}
+
+	if (strcmp(id, "dai") == 0) {
+		err = tplg_parse_compound(tplg, n,
+			tplg_parse_fe_dai, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* flags */
+	if (strcmp(id, "symmetric_rates") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_channels") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_sample_bits") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
+			&pcm->flag_mask, &pcm->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* private data */
+	if (strcmp(id, "data") == 0) {
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse PCM (for front end DAI & DAI link) in text conf file */
 int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 		   void *private ATTRIBUTE_UNUSED)
@@ -843,8 +942,7 @@ int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id;
-	int err, ival;
+	int err;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_PCM);
 	if (!elem)
@@ -859,83 +957,9 @@ int tplg_parse_pcm(snd_tplg_t *tplg, snd_config_t *cfg,
 	snd_config_for_each(i, next, cfg) {
 
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &pcm->pcm_id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "pcm") == 0) {
-			err = tplg_parse_compound(tplg, n,
-				tplg_parse_streams, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "compress") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			pcm->compress = ival;
-
-			tplg_dbg("\t%s: %d", id, ival);
-			continue;
-		}
-
-		if (strcmp(id, "dai") == 0) {
-			err = tplg_parse_compound(tplg, n,
-				tplg_parse_fe_dai, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* flags */
-		if (strcmp(id, "symmetric_rates") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_channels") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_sample_bits") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
-				&pcm->flag_mask, &pcm->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* private data */
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
+		err = tplg_parse_pcm_param(tplg, n, elem);
+		if (err < 0)
+			return err;
 	}
 
 	return 0;
@@ -1130,6 +1154,94 @@ static int parse_hw_config_refs(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return 0;
 }
 
+int tplg_parse_link_param(snd_tplg_t *tplg, snd_config_t *n,
+			  struct snd_soc_tplg_link_config *link, struct tplg_elem *elem)
+{
+	const char *id, *val = NULL;
+	int err;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &link->id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "stream_name") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		snd_strlcpy(link->stream_name, val,
+			       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
+		tplg_dbg("\t%s: %s", id, val);
+		return 0;
+	}
+
+	if (strcmp(id, "hw_configs") == 0) {
+		if (!elem)
+			return 0;
+
+		err = parse_hw_config_refs(tplg, n, elem);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "default_hw_conf_id") == 0) {
+		if (parse_unsigned(n, &link->default_hw_config_id))
+			return -EINVAL;
+		return 0;
+	}
+
+	/* flags */
+	if (strcmp(id, "symmetric_rates") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_channels") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	if (strcmp(id, "symmetric_sample_bits") == 0) {
+		err = parse_flag(n,
+			SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
+			&link->flag_mask, &link->flags);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	/* private data */
+	if (strcmp(id, "data") == 0) {
+		if (!elem)
+			return 0;
+		err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
+		if (err < 0)
+			return err;
+		return 0;
+	}
+
+	return 0;
+}
+
 /* Parse a physical link element in text conf file */
 int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 		    void *private ATTRIBUTE_UNUSED)
@@ -1138,8 +1250,7 @@ int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 	struct tplg_elem *elem;
 	snd_config_iterator_t i, next;
 	snd_config_t *n;
-	const char *id, *val = NULL;
-	int err;
+	int ret;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_BE);
 	if (!elem)
@@ -1152,81 +1263,10 @@ int tplg_parse_link(snd_tplg_t *tplg, snd_config_t *cfg,
 	tplg_dbg(" Link: %s", elem->id);
 
 	snd_config_for_each(i, next, cfg) {
-
 		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &link->id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "stream_name") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			snd_strlcpy(link->stream_name, val,
-				       SNDRV_CTL_ELEM_ID_NAME_MAXLEN);
-			tplg_dbg("\t%s: %s", id, val);
-			continue;
-		}
-
-		if (strcmp(id, "hw_configs") == 0) {
-			err = parse_hw_config_refs(tplg, n, elem);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "default_hw_conf_id") == 0) {
-			if (parse_unsigned(n, &link->default_hw_config_id))
-				return -EINVAL;
-			continue;
-		}
-
-		/* flags */
-		if (strcmp(id, "symmetric_rates") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_RATES,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_channels") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_CHANNELS,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		if (strcmp(id, "symmetric_sample_bits") == 0) {
-			err = parse_flag(n,
-				SND_SOC_TPLG_LNK_FLGBIT_SYMMETRIC_SAMPLEBITS,
-				&link->flag_mask, &link->flags);
-			if (err < 0)
-				return err;
-			continue;
-		}
-
-		/* private data */
-		if (strcmp(id, "data") == 0) {
-			err = tplg_parse_refs(n, elem, SND_TPLG_TYPE_DATA);
-			if (err < 0)
-				return err;
-			continue;
-		}
+		ret = tplg_parse_link_param(tplg, n, link, elem);
+		if (ret < 0)
+			return ret;
 	}
 
 	return 0;
@@ -1397,17 +1437,245 @@ static const char *get_audio_hw_format_name(unsigned int type)
 	return NULL;
 }
 
-int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
-			 void *private ATTRIBUTE_UNUSED)
+int tplg_set_hw_config_param(snd_config_t *n, struct snd_soc_tplg_hw_config *hw_cfg)
 {
-
-	struct snd_soc_tplg_hw_config *hw_cfg;
-	struct tplg_elem *elem;
-	snd_config_iterator_t i, next;
-	snd_config_t *n;
 	const char *id, *val = NULL;
 	int ret, ival;
 	bool provider_legacy;
+
+	if (snd_config_get_id(n, &id) < 0)
+		return 0;
+
+	/* skip comments */
+	if (strcmp(id, "comment") == 0)
+		return 0;
+	if (id[0] == '#')
+		return 0;
+
+	if (strcmp(id, "id") == 0) {
+		if (parse_unsigned(n, &hw_cfg->id))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "format") == 0 ||
+	    strcmp(id, "fmt") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		ret = get_audio_hw_format(val);
+		if (ret < 0)
+			return ret;
+		hw_cfg->fmt = ret;
+		return 0;
+	}
+
+	provider_legacy = false;
+	if (strcmp(id, "bclk_master") == 0) {
+		SNDERR("deprecated option %s, please use 'bclk'\n", id);
+		provider_legacy = true;
+	}
+
+	if (provider_legacy ||
+	    strcmp(id, "bclk") == 0) {
+
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "codec is slave"
+			 */
+			SNDERR("deprecated bclk value '%s'", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_slave")) {
+			SNDERR("deprecated bclk value '%s', use 'codec_consumer'", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_consumer")) {
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
+		} else if (!strcmp(val, "codec_master")) {
+			SNDERR("deprecated bclk value '%s', use 'codec_provider", val);
+
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
+		} else if (!strcmp(val, "codec_provider")) {
+			hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "bclk_freq") == 0 ||
+	    strcmp(id, "bclk_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->bclk_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "bclk_invert") == 0 ||
+	    strcmp(id, "invert_bclk") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		hw_cfg->invert_bclk = ival;
+		return 0;
+	}
+
+	provider_legacy = false;
+	if (strcmp(id, "fsync_master") == 0) {
+		SNDERR("deprecated option %s, please use 'fsync'\n", id);
+		provider_legacy = true;
+	}
+
+	if (provider_legacy ||
+	    strcmp(id, "fsync") == 0) {
+
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "codec is slave"
+			 */
+			SNDERR("deprecated fsync value '%s'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_slave")) {
+			SNDERR("deprecated fsync value '%s', use 'codec_consumer'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_consumer")) {
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
+		} else if (!strcmp(val, "codec_master")) {
+			SNDERR("deprecated fsync value '%s', use 'codec_provider'", val);
+
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
+		} else if (!strcmp(val, "codec_provider")) {
+			hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "fsync_invert") == 0 ||
+	    strcmp(id, "invert_fsync") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		hw_cfg->invert_fsync = ival;
+		return 0;
+	}
+
+	if (strcmp(id, "fsync_freq") == 0 ||
+	    strcmp(id, "fsync_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->fsync_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "mclk_freq") == 0 ||
+	    strcmp(id, "mclk_rate") == 0) {
+		if (parse_unsigned(n, &hw_cfg->mclk_rate))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "mclk") == 0 ||
+	    strcmp(id, "mclk_direction") == 0) {
+		if (snd_config_get_string(n, &val) < 0)
+			return -EINVAL;
+
+		if (!strcmp(val, "master")) {
+			/* For backwards capability,
+			 * "master" == "for codec, mclk is input"
+			 */
+			SNDERR("deprecated mclk value '%s'", val);
+
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
+		} else if (!strcmp(val, "codec_mclk_in")) {
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
+		} else if (!strcmp(val, "codec_mclk_out")) {
+			hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CO;
+		}
+		return 0;
+	}
+
+	if (strcmp(id, "pm_gate_clocks") == 0 ||
+	    strcmp(id, "clock_gated") == 0) {
+		ival = snd_config_get_bool(n);
+		if (ival < 0)
+			return -EINVAL;
+
+		if (ival)
+			hw_cfg->clock_gated =
+				SND_SOC_TPLG_DAI_CLK_GATE_GATED;
+		else
+			hw_cfg->clock_gated =
+				SND_SOC_TPLG_DAI_CLK_GATE_CONT;
+		return 0;
+	}
+
+	if (strcmp(id, "tdm_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tdm_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tdm_slot_width") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tdm_slot_width))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tx_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tx_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rx_slots") == 0) {
+		if (parse_unsigned(n, &hw_cfg->rx_slots))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "tx_channels") == 0) {
+		if (parse_unsigned(n, &hw_cfg->tx_channels))
+			return -EINVAL;
+		return 0;
+	}
+
+	if (strcmp(id, "rx_channels") == 0) {
+		if (parse_unsigned(n, &hw_cfg->rx_channels))
+			return -EINVAL;
+		return 0;
+	}
+
+	return 0;
+}
+
+static int tplg_set_hw_config(snd_config_t *cfg, struct snd_soc_tplg_hw_config *hw_cfg)
+{
+	snd_config_iterator_t i, next;
+	snd_config_t *n;
+	int ret;
+
+	snd_config_for_each(i, next, cfg) {
+		n = snd_config_iterator_entry(i);
+		ret = tplg_set_hw_config_param(n, hw_cfg);
+		if (ret < 0)
+			return ret;
+	}
+
+	return 0;
+}
+
+int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
+			 void *private ATTRIBUTE_UNUSED)
+{
+	struct snd_soc_tplg_hw_config *hw_cfg;
+	struct tplg_elem *elem;
 
 	elem = tplg_elem_new_common(tplg, cfg, NULL, SND_TPLG_TYPE_HW_CONFIG);
 	if (!elem)
@@ -1418,221 +1686,7 @@ int tplg_parse_hw_config(snd_tplg_t *tplg, snd_config_t *cfg,
 
 	tplg_dbg(" Link HW config: %s", elem->id);
 
-	snd_config_for_each(i, next, cfg) {
-
-		n = snd_config_iterator_entry(i);
-		if (snd_config_get_id(n, &id) < 0)
-			continue;
-
-		/* skip comments */
-		if (strcmp(id, "comment") == 0)
-			continue;
-		if (id[0] == '#')
-			continue;
-
-		if (strcmp(id, "id") == 0) {
-			if (parse_unsigned(n, &hw_cfg->id))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "format") == 0 ||
-		    strcmp(id, "fmt") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			ret = get_audio_hw_format(val);
-			if (ret < 0)
-				return ret;
-			hw_cfg->fmt = ret;
-			continue;
-		}
-
-		provider_legacy = false;
-		if (strcmp(id, "bclk_master") == 0) {
-			SNDERR("deprecated option %s, please use 'bclk'\n", id);
-			provider_legacy = true;
-		}
-
-		if (provider_legacy ||
-		    strcmp(id, "bclk") == 0) {
-
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "codec is slave"
-				 */
-				SNDERR("deprecated bclk value '%s'", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_slave")) {
-				SNDERR("deprecated bclk value '%s', use 'codec_consumer'", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_consumer")) {
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CC;
-			} else if (!strcmp(val, "codec_master")) {
-				SNDERR("deprecated bclk value '%s', use 'codec_provider", val);
-
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
-			} else if (!strcmp(val, "codec_provider")) {
-				hw_cfg->bclk_provider = SND_SOC_TPLG_BCLK_CP;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "bclk_freq") == 0 ||
-		    strcmp(id, "bclk_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->bclk_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "bclk_invert") == 0 ||
-		    strcmp(id, "invert_bclk") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			hw_cfg->invert_bclk = ival;
-			continue;
-		}
-
-		provider_legacy = false;
-		if (strcmp(id, "fsync_master") == 0) {
-			SNDERR("deprecated option %s, please use 'fsync'\n", id);
-			provider_legacy = true;
-		}
-
-		if (provider_legacy ||
-		    strcmp(id, "fsync") == 0) {
-
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "codec is slave"
-				 */
-				SNDERR("deprecated fsync value '%s'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_slave")) {
-				SNDERR("deprecated fsync value '%s', use 'codec_consumer'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_consumer")) {
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CC;
-			} else if (!strcmp(val, "codec_master")) {
-				SNDERR("deprecated fsync value '%s', use 'codec_provider'", val);
-
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
-			} else if (!strcmp(val, "codec_provider")) {
-				hw_cfg->fsync_provider = SND_SOC_TPLG_FSYNC_CP;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "fsync_invert") == 0 ||
-		    strcmp(id, "invert_fsync") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			hw_cfg->invert_fsync = ival;
-			continue;
-		}
-
-		if (strcmp(id, "fsync_freq") == 0 ||
-		    strcmp(id, "fsync_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->fsync_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "mclk_freq") == 0 ||
-		    strcmp(id, "mclk_rate") == 0) {
-			if (parse_unsigned(n, &hw_cfg->mclk_rate))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "mclk") == 0 ||
-		    strcmp(id, "mclk_direction") == 0) {
-			if (snd_config_get_string(n, &val) < 0)
-				return -EINVAL;
-
-			if (!strcmp(val, "master")) {
-				/* For backwards capability,
-				 * "master" == "for codec, mclk is input"
-				 */
-				SNDERR("deprecated mclk value '%s'", val);
-
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
-			} else if (!strcmp(val, "codec_mclk_in")) {
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CI;
-			} else if (!strcmp(val, "codec_mclk_out")) {
-				hw_cfg->mclk_direction = SND_SOC_TPLG_MCLK_CO;
-			}
-			continue;
-		}
-
-		if (strcmp(id, "pm_gate_clocks") == 0 ||
-		    strcmp(id, "clock_gated") == 0) {
-			ival = snd_config_get_bool(n);
-			if (ival < 0)
-				return -EINVAL;
-
-			if (ival)
-				hw_cfg->clock_gated =
-					SND_SOC_TPLG_DAI_CLK_GATE_GATED;
-			else
-				hw_cfg->clock_gated =
-					SND_SOC_TPLG_DAI_CLK_GATE_CONT;
-			continue;
-		}
-
-		if (strcmp(id, "tdm_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tdm_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tdm_slot_width") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tdm_slot_width))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tx_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tx_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rx_slots") == 0) {
-			if (parse_unsigned(n, &hw_cfg->rx_slots))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "tx_channels") == 0) {
-			if (parse_unsigned(n, &hw_cfg->tx_channels))
-				return -EINVAL;
-			continue;
-		}
-
-		if (strcmp(id, "rx_channels") == 0) {
-			if (parse_unsigned(n, &hw_cfg->rx_channels))
-				return -EINVAL;
-			continue;
-		}
-
-	}
-
-	return 0;
+	return tplg_set_hw_config(cfg, hw_cfg);
 }
 
 /* save hw config */
@@ -1700,8 +1754,8 @@ int tplg_save_hw_config(snd_tplg_t *tplg ATTRIBUTE_UNUSED,
 	return err;
 }
 
-/* copy stream object */
-static void tplg_add_stream_object(struct snd_soc_tplg_stream *strm,
+/* copy stream config */
+static void tplg_add_stream_config(struct snd_soc_tplg_stream *strm,
 				   struct snd_tplg_stream_template *strm_tpl)
 {
 	snd_strlcpy(strm->name, strm_tpl->name,
@@ -1745,7 +1799,7 @@ static int tplg_add_stream_caps(snd_tplg_t *tplg,
 }
 
 /* Add a PCM element (FE DAI & DAI link) from C API */
-int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_pcm_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_pcm_template *pcm_tpl = t->pcm;
 	struct snd_soc_tplg_private *priv;
@@ -1791,7 +1845,7 @@ int tplg_add_pcm_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 
 	pcm->num_streams = pcm_tpl->num_streams;
 	for (i = 0; i < pcm_tpl->num_streams; i++)
-		tplg_add_stream_object(&pcm->stream[i], &pcm_tpl->stream[i]);
+		tplg_add_stream_config(&pcm->stream[i], &pcm_tpl->stream[i]);
 
 	/* private data */
 	priv = pcm_tpl->priv;
@@ -1847,7 +1901,7 @@ static int set_link_hw_config(struct snd_soc_tplg_hw_config *cfg,
 }
 
 /* Add a physical DAI link element from C API */
-int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_link_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_link_template *link_tpl = t->link;
 	struct snd_soc_tplg_link_config *link;
@@ -1881,7 +1935,7 @@ int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 		return -EINVAL;
 	link->num_streams = link_tpl->num_streams;
 	for (i = 0; i < link->num_streams; i++)
-		tplg_add_stream_object(&link->stream[i], &link_tpl->stream[i]);
+		tplg_add_stream_config(&link->stream[i], &link_tpl->stream[i]);
 
 	/* HW configs */
 	if (link_tpl->num_hw_configs > SND_SOC_TPLG_HW_CONFIG_MAX)
@@ -1907,7 +1961,7 @@ int tplg_add_link_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 	return 0;
 }
 
-int tplg_add_dai_object(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
+int tplg_add_dai_element(snd_tplg_t *tplg, snd_tplg_obj_template_t *t)
 {
 	struct snd_tplg_dai_template *dai_tpl = t->dai;
 	struct snd_soc_tplg_dai *dai;
@@ -2076,7 +2130,7 @@ next:
 	pos += sizeof(*pcm) + pcm->priv.size;
 
 	t.pcm = pt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	if (err < 0)
 		return err;
 
@@ -2237,7 +2291,7 @@ next:
 	pos += sizeof(*link) + link->priv.size;
 
 	t.link = &lt;
-	err = snd_tplg_add_object(tplg, &t);
+	err = snd_tplg_add_element(tplg, &t);
 	if (err < 0)
 		return err;
 
